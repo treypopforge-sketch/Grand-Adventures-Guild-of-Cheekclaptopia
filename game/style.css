@@ -575,10 +575,28 @@ button:disabled {
   border-color: rgba(239, 91, 87, 0.35);
 }
 
+.inline-pill--type {
+  color: #d9ecff;
+  border-color: rgba(140, 180, 255, 0.3);
+  background: rgba(140, 180, 255, 0.08);
+}
+
 .inline-pill--modifier {
   color: #ffdca0;
   border-color: rgba(255, 208, 128, 0.28);
   background: rgba(255, 208, 128, 0.08);
+}
+
+.inline-pill--rare {
+  color: #ffddb2;
+  border-color: rgba(255, 176, 94, 0.42);
+  background: rgba(255, 176, 94, 0.12);
+}
+
+.inline-pill--boss {
+  color: #ffb4b0;
+  border-color: rgba(242, 95, 92, 0.42);
+  background: rgba(242, 95, 92, 0.12);
 }
 
 .inline-pill--focus {
@@ -603,6 +621,10 @@ button:disabled {
   display: block;
   margin-bottom: 8px;
   color: #ffd767;
+}
+
+.contract-preview .muted {
+  margin: 0 0 10px;
 }
 
 .guild-header p {
@@ -779,6 +801,10 @@ button:disabled {
   display: grid;
   gap: 16px;
   text-align: center;
+}
+
+.result-pill-row {
+  justify-content: center;
 }
 
 .result-breakdown {
