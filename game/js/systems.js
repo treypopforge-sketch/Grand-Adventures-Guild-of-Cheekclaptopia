@@ -89,29 +89,78 @@
   }
 
   function getGuildLevel(state) {
-    return 1 + Math.floor((state.progress.missionsCompleted + state.adventurers.length) / 3);
+    if (state && typeof state.guildLevel === "number") {
+      return state.guildLevel;
+    }
+
+    return getGuildLevelFromGoldSpent(state && typeof state.totalGoldSpent === "number" ? state.totalGoldSpent : 0);
+  }
+
+  function getGuildLevelFromGoldSpent(totalGoldSpent) {
+    var thresholds = window.GameData.guildLevelThresholds || [0];
+    var level = 1;
+    var index;
+
+    for (index = 0; index < thresholds.length; index += 1) {
+      if (totalGoldSpent >= thresholds[index]) {
+        level = index + 1;
+      }
+    }
+
+    return level;
+  }
+
+  function getNextGuildLevelTarget(level) {
+    var thresholds = window.GameData.guildLevelThresholds || [0];
+    return thresholds[level] || null;
+  }
+
+  function getGuildProgress(state) {
+    var level = getGuildLevel(state);
+    var thresholds = window.GameData.guildLevelThresholds || [0];
+    var currentThreshold = thresholds[Math.max(0, level - 1)] || 0;
+    var nextThreshold = getNextGuildLevelTarget(level);
+    var spent = state.totalGoldSpent || 0;
+
+    return {
+      level: level,
+      spent: spent,
+      currentThreshold: currentThreshold,
+      nextThreshold: nextThreshold,
+      currentProgress: nextThreshold ? spent - currentThreshold : spent,
+      neededForNext: nextThreshold ? nextThreshold - currentThreshold : 0
+    };
   }
 
   function getPartyCapacity(state) {
-    var guildLevel = getGuildLevel(state);
-    return Math.max(1, Math.min(3, 1 + Math.floor((guildLevel - 1) / 3)));
+    if (state && typeof state.maxParties === "number") {
+      return state.maxParties;
+    }
+
+    return Math.max(1, Math.min(3, getGuildLevel(state)));
   }
 
-  function getTavernStatRange(tavernLevel) {
-    if (window.GameData.tavernStatRanges[tavernLevel]) {
-      return window.GameData.tavernStatRanges[tavernLevel];
+  function getPartyCapacityForLevel(guildLevel) {
+    return Math.max(1, Math.min(3, guildLevel));
+  }
+
+  function getTavernStatRange(guildLevel) {
+    var clampedLevel = Math.max(1, Math.min(3, guildLevel || 1));
+
+    if (window.GameData.tavernStatRanges[clampedLevel]) {
+      return window.GameData.tavernStatRanges[clampedLevel];
     }
 
     return {
-      min: 7 + ((tavernLevel - 3) * 2),
-      max: 12 + ((tavernLevel - 3) * 2)
+      min: 7,
+      max: 12
     };
   }
 
   function generateRecruit(state, index) {
     var classes = Object.keys(window.GameData.classDetails);
     var heroClass = randomFrom(classes);
-    var range = getTavernStatRange(state.tavernLevel || 1);
+    var range = getTavernStatRange(getGuildLevel(state));
     var namePool = window.GameData.recruitNamePools[heroClass];
     var usedNames = state.adventurers.map(function (adventurer) {
       return adventurer.name;
@@ -143,7 +192,7 @@
     var workingState = {
       adventurers: clone(state.adventurers || []),
       tavernOffers: clone(state.tavernOffers || []),
-      tavernLevel: state.tavernLevel || 1
+      guildLevel: getGuildLevel(state)
     };
 
     while (offers.length < count) {
@@ -152,7 +201,7 @@
       offers.push({
         id: "offer-" + recruit.id,
         adventurer: recruit,
-        cost: 70 + (calculatePower(recruit) * 12) + (state.tavernLevel * 8)
+        cost: 70 + (calculatePower(recruit) * 12) + (getGuildLevel(state) * 8)
       });
     }
 
@@ -382,11 +431,15 @@
     generateTavernOffers: generateTavernOffers,
     getAdventurerById: getAdventurerById,
     getGuildLevel: getGuildLevel,
+    getGuildLevelFromGoldSpent: getGuildLevelFromGoldSpent,
+    getGuildProgress: getGuildProgress,
     getLocationById: getLocationById,
     getMissionRiskWarnings: getMissionRiskWarnings,
     getNodeTypeMeta: getNodeTypeMeta,
+    getNextGuildLevelTarget: getNextGuildLevelTarget,
     getPartyById: getPartyById,
     getPartyCapacity: getPartyCapacity,
+    getPartyCapacityForLevel: getPartyCapacityForLevel,
     getPartyMembers: getPartyMembers,
     getPartyPower: getPartyPower,
     getPartyStatTotal: getPartyStatTotal,

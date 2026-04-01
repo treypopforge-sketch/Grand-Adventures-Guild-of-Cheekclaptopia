@@ -50,7 +50,9 @@
     var freshState = {
       gold: 180,
       day: 1,
-      tavernLevel: 1,
+      guildLevel: 1,
+      totalGoldSpent: 0,
+      maxParties: 1,
       adventurers: starterAdventurers,
       currentParties: [createParty(1)],
       activePartyId: 1,
@@ -86,7 +88,9 @@
     return {
       gold: 0,
       day: 1,
-      tavernLevel: 1,
+      guildLevel: 1,
+      totalGoldSpent: 0,
+      maxParties: 1,
       adventurers: [],
       currentParties: [createParty(1)],
       activePartyId: 1,
@@ -124,8 +128,43 @@
     return getPartyById(targetState, targetState.activePartyId) || targetState.currentParties[0] || null;
   }
 
+  function applyGuildProgression(targetState) {
+    var previousLevel = typeof targetState.guildLevel === "number" ? targetState.guildLevel : 1;
+    var previousMaxParties = typeof targetState.maxParties === "number" ? targetState.maxParties : 1;
+    var nextLevel = window.GameSystems.getGuildLevelFromGoldSpent(targetState.totalGoldSpent || 0);
+    var nextMaxParties = window.GameSystems.getPartyCapacityForLevel(nextLevel);
+
+    targetState.guildLevel = nextLevel;
+    targetState.maxParties = nextMaxParties;
+
+    return {
+      leveledUp: nextLevel > previousLevel,
+      capacityIncreased: nextMaxParties > previousMaxParties,
+      previousLevel: previousLevel,
+      nextLevel: nextLevel,
+      nextMaxParties: nextMaxParties
+    };
+  }
+
+  function spendGold(targetState, amount) {
+    if (targetState.gold < amount) {
+      return {
+        success: false,
+        progression: null
+      };
+    }
+
+    targetState.gold -= amount;
+    targetState.totalGoldSpent += amount;
+
+    return {
+      success: true,
+      progression: applyGuildProgression(targetState)
+    };
+  }
+
   function syncPartyStructure(targetState) {
-    var desiredCount = window.GameSystems.getPartyCapacity(targetState);
+    var desiredCount = targetState.maxParties || window.GameSystems.getPartyCapacity(targetState);
     var seenAdventurers = {};
     var nextId = 1;
 
@@ -167,7 +206,9 @@
     return {
       gold: state.gold,
       day: state.day,
-      tavernLevel: state.tavernLevel,
+      guildLevel: state.guildLevel,
+      totalGoldSpent: state.totalGoldSpent,
+      maxParties: state.maxParties,
       adventurers: clone(state.adventurers),
       currentParties: clone(state.currentParties),
       activePartyId: state.activePartyId,
@@ -234,7 +275,13 @@
     var fresh = createRunState();
     fresh.gold = typeof savedState.gold === "number" ? savedState.gold : fresh.gold;
     fresh.day = typeof savedState.day === "number" ? savedState.day : fresh.day;
-    fresh.tavernLevel = typeof savedState.tavernLevel === "number" ? savedState.tavernLevel : fresh.tavernLevel;
+    fresh.totalGoldSpent = typeof savedState.totalGoldSpent === "number" ? savedState.totalGoldSpent : 0;
+    fresh.guildLevel = typeof savedState.guildLevel === "number"
+      ? savedState.guildLevel
+      : Math.max(savedState.tavernLevel || 1, window.GameSystems.getGuildLevelFromGoldSpent(fresh.totalGoldSpent));
+    fresh.maxParties = typeof savedState.maxParties === "number"
+      ? savedState.maxParties
+      : window.GameSystems.getPartyCapacityForLevel(fresh.guildLevel);
     fresh.adventurers = Array.isArray(savedState.adventurers) ? normalizeAdventurers(savedState.adventurers) : fresh.adventurers;
     fresh.currentParties = Array.isArray(savedState.currentParties) ? savedState.currentParties : [createParty(1)];
     if (!savedState.currentParties && Array.isArray(savedState.currentParty)) {
@@ -254,6 +301,7 @@
     fresh.settings = Object.assign({}, fresh.settings, savedState.settings || {});
     fresh.lastResult = savedState.lastResult || null;
     fresh.progress = Object.assign({}, fresh.progress, savedState.progress || {});
+    applyGuildProgression(fresh);
     syncPartyStructure(fresh);
     if (!fresh.tavernOffers.length) {
       fresh.tavernOffers = window.GameSystems.generateTavernOffers(fresh, 3);
@@ -439,23 +487,37 @@
       return;
     }
 
-    if (state.gold < offer.cost) {
+    var spendResult = spendGold(state, offer.cost);
+    if (!spendResult.success) {
       showToast("Not enough gold for that recruit.");
       return;
     }
 
-    state.gold -= offer.cost;
     state.adventurers.push(normalizeAdventurer(clone(offer.adventurer)));
     state.progress.recruitedCount += 1;
     state.tavernOffers = state.tavernOffers.filter(function (entry) {
       return entry.id !== offerId;
     });
 
+    if (spendResult.progression && spendResult.progression.leveledUp) {
+      state.tavernOffers = window.GameSystems.generateTavernOffers(state, 3);
+    } else {
+      state.tavernOffers = state.tavernOffers.concat(window.GameSystems.generateTavernOffers(state, 1));
+    }
+
     syncPartyStructure(state);
-    state.tavernOffers = state.tavernOffers.concat(window.GameSystems.generateTavernOffers(state, 1));
 
     persist();
     emit();
+    if (spendResult.progression && spendResult.progression.leveledUp) {
+      if (spendResult.progression.capacityIncreased) {
+        showToast("Guild Level Up! Party capacity increased!");
+      } else {
+        showToast("Guild Level Up! Better recruits are arriving.");
+      }
+      return;
+    }
+
     showToast(offer.adventurer.name + " joined the guild.");
   }
 

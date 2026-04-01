@@ -22,6 +22,7 @@
 
   window.GameData = {
     maxPartySize: 3,
+    guildLevelThresholds: [0, 300, 800, 1600, 3000],
     difficultyConfig: {
       Easy: { dc: 10, rewardGold: 90, badge: "easy" },
       Medium: { dc: 15, rewardGold: 140, badge: "medium" },

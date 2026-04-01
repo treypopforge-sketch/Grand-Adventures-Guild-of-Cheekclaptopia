@@ -64,7 +64,7 @@
   }
 
   function renderTopBar(state, showEndDay) {
-    var range = window.GameSystems.getTavernStatRange(state.tavernLevel || 1);
+    var progress = window.GameSystems.getGuildProgress(state);
     return '' +
       '<div class="top-strip top-strip--wide">' +
         '<div class="top-strip__stats">' +
@@ -73,12 +73,12 @@
             "<strong>" + state.gold.toLocaleString() + "</strong>" +
           "</div>" +
           '<div class="gold-chip subdued-chip">' +
-            '<span class="chip-label">Day</span>' +
-            "<strong>" + state.day + "</strong>" +
+            '<span class="chip-label">Guild</span>' +
+            "<strong>Level " + state.guildLevel + "</strong>" +
           "</div>" +
           '<div class="gold-chip subdued-chip">' +
-            '<span class="chip-label">Tavern</span>' +
-            "<strong>L" + state.tavernLevel + " | " + range.min + "-" + range.max + "</strong>" +
+            '<span class="chip-label">Progress</span>' +
+            "<strong>" + (progress.nextThreshold ? (state.totalGoldSpent + " / " + progress.nextThreshold) : "Max") + "</strong>" +
           "</div>" +
         "</div>" +
         (showEndDay ? '<button class="end-day-button" data-action="end-day">End Day</button>' : "") +
@@ -144,7 +144,7 @@
     }
 
     if (state.activeHubPanel === "tavern") {
-      var range = window.GameSystems.getTavernStatRange(state.tavernLevel || 1);
+      var range = window.GameSystems.getTavernStatRange(state.guildLevel || 1);
       var offers = state.tavernOffers.length ? state.tavernOffers.map(function (offer) {
         var power = powerValue(offer.adventurer);
         return '' +
@@ -163,7 +163,7 @@
         '<section class="sheet-overlay" data-action="close-panel">' +
           '<div class="sheet-panel" data-stop-click="true">' +
             '<div class="sheet-head"><h3>Tavern</h3><button class="close-x" data-action="close-panel">Close</button></div>' +
-            '<p class="muted">Level ' + state.tavernLevel + " recruits roll stats from " + range.min + "-" + range.max + ".</p>" +
+            '<p class="muted">Guild level ' + state.guildLevel + " brings recruits with " + range.min + "-" + range.max + " stat rolls.</p>" +
             '<div class="sheet-list">' + offers + "</div>" +
           "</div>" +
         "</section>";
@@ -197,15 +197,15 @@
   }
 
   function renderHub(state) {
-    var guildLevel = window.GameSystems.getGuildLevel(state);
-    var partyCapacity = window.GameSystems.getPartyCapacity(state);
+    var progress = window.GameSystems.getGuildProgress(state);
     return '' +
       '<section class="screen hub-screen">' +
         renderTopBar(state, true) +
         '<div class="guild-banner panel-card">' +
-          '<p class="eyebrow">Guild Level ' + guildLevel + "</p>" +
+          '<p class="eyebrow">Guild Level ' + state.guildLevel + "</p>" +
           "<h2>Your guild is growing stronger</h2>" +
-          '<p class="muted">Completed missions: ' + state.progress.missionsCompleted + " | Recruits hired: " + state.progress.recruitedCount + " | Party slots: " + partyCapacity + "</p>" +
+          '<p class="muted">Completed missions: ' + state.progress.missionsCompleted + " | Recruits hired: " + state.progress.recruitedCount + " | Party slots: " + state.maxParties + "</p>" +
+          '<p class="muted">Progress: ' + (progress.nextThreshold ? (state.totalGoldSpent + " / " + progress.nextThreshold) : "Max guild level reached") + "</p>" +
           '<div class="party-summary-grid">' +
             state.currentParties.map(function (party) {
               return renderPartySummary(state, party);
