@@ -52,7 +52,7 @@
         '<div class="title-wrap">' +
           '<p class="eyebrow">Dark fantasy mobile MVP</p>' +
           "<h1>Grand Adventures Guild of Cheekclaptopia</h1>" +
-          "<p class=\"subcopy\">Guide a small guild from the hub to the map, through missions, and back again with every outcome resolved by a volatile d20.</p>" +
+          "<p class=\"subcopy\">Every contract now rewards smart team building, correct mission matching, and careful recovery planning.</p>" +
         "</div>" +
         '<div class="start-actions">' +
           '<button class="primary-button" data-action="new-game">New Game</button>' +
@@ -63,17 +63,25 @@
       "</section>";
   }
 
-  function renderTopGold(state) {
+  function renderTopBar(state, showEndDay) {
+    var range = window.GameSystems.getTavernStatRange(state.tavernLevel || 1);
     return '' +
-      '<div class="top-strip">' +
-        '<div class="gold-chip">' +
-          '<span class="chip-label">Gold</span>' +
-          "<strong>" + state.gold.toLocaleString() + "</strong>" +
+      '<div class="top-strip top-strip--wide">' +
+        '<div class="top-strip__stats">' +
+          '<div class="gold-chip">' +
+            '<span class="chip-label">Gold</span>' +
+            "<strong>" + state.gold.toLocaleString() + "</strong>" +
+          "</div>" +
+          '<div class="gold-chip subdued-chip">' +
+            '<span class="chip-label">Day</span>' +
+            "<strong>" + state.day + "</strong>" +
+          "</div>" +
+          '<div class="gold-chip subdued-chip">' +
+            '<span class="chip-label">Tavern</span>' +
+            "<strong>L" + state.tavernLevel + " | " + range.min + "-" + range.max + "</strong>" +
+          "</div>" +
         "</div>" +
-        '<div class="gold-chip subdued-chip">' +
-          '<span class="chip-label">Roster</span>' +
-          "<strong>" + state.adventurers.length + "</strong>" +
-        "</div>" +
+        (showEndDay ? '<button class="end-day-button" data-action="end-day">End Day</button>' : "") +
       "</div>";
   }
 
@@ -88,18 +96,45 @@
       "</nav>";
   }
 
-  function renderAdventurerCard(adventurer, selected, interactive) {
-    var selectedClass = selected ? " roster-card--selected" : "";
-    var actionAttributes = interactive ? ' data-action="toggle-party" data-adventurer-id="' + adventurer.id + '"' : "";
+  function getPartyAssignment(state, adventurerId) {
+    return state.currentParties.find(function (party) {
+      return party.members.indexOf(adventurerId) !== -1;
+    }) || null;
+  }
+
+  function renderAdventurerCard(adventurer, state, interactive) {
+    var assignedParty = getPartyAssignment(state, adventurer.id);
+    var activeParty = window.GameSystems.getPartyById(state, state.activePartyId);
+    var isSelected = assignedParty && activeParty && assignedParty.id === activeParty.id;
+    var isAssignedElsewhere = assignedParty && activeParty && assignedParty.id !== activeParty.id;
+    var classes = [];
+    var status = window.GameSystems.getStatusLabel(adventurer);
+
+    if (isSelected) {
+      classes.push("roster-card--selected");
+      status = status === "Ready" ? "Party " + assignedParty.id : status + " | Party " + assignedParty.id;
+    } else if (isAssignedElsewhere) {
+      classes.push("roster-card--assigned-other");
+      status = status === "Ready" ? "Party " + assignedParty.id : status + " | Party " + assignedParty.id;
+    }
+
+    if (adventurer.status === "tired") {
+      classes.push("roster-card--tired");
+    } else if (adventurer.status === "injured") {
+      classes.push("roster-card--injured");
+    }
+
     return '' +
-      '<button class="roster-card' + selectedClass + '"' + actionAttributes + ">" +
+      '<button class="roster-card ' + classes.join(" ") + '"' +
+        (interactive ? ' data-action="toggle-party" data-adventurer-id="' + adventurer.id + '"' : "") +
+      ">" +
         '<div class="hero-mark">' + classBadge(adventurer.class) + "</div>" +
         '<div class="roster-card__body">' +
           "<strong>" + escapeHtml(adventurer.name) + "</strong>" +
           "<p>" + escapeHtml(adventurer.class) + " | Power " + powerValue(adventurer) + "</p>" +
           '<p class="stats-line">ATK ' + adventurer.atk + "  DEF " + adventurer.def + "  SPD " + adventurer.spd + "</p>" +
         "</div>" +
-        '<span class="selection-pill">' + (selected ? "Assigned" : "Ready") + "</span>" +
+        '<span class="selection-pill">' + escapeHtml(status) + "</span>" +
       "</button>";
   }
 
@@ -109,6 +144,7 @@
     }
 
     if (state.activeHubPanel === "tavern") {
+      var range = window.GameSystems.getTavernStatRange(state.tavernLevel || 1);
       var offers = state.tavernOffers.length ? state.tavernOffers.map(function (offer) {
         var power = powerValue(offer.adventurer);
         return '' +
@@ -121,50 +157,69 @@
             "</div>" +
             '<button class="mini-button" data-action="recruit" data-offer-id="' + offer.id + '">Hire ' + offer.cost + "g</button>" +
           "</article>";
-      }).join("") : '<p class="muted">The tavern has no more candidates tonight.</p>';
+      }).join("") : '<p class="muted">The tavern is quiet tonight.</p>';
 
       return '' +
         '<section class="sheet-overlay" data-action="close-panel">' +
           '<div class="sheet-panel" data-stop-click="true">' +
             '<div class="sheet-head"><h3>Tavern</h3><button class="close-x" data-action="close-panel">Close</button></div>' +
-            '<p class="muted">Recruit one hero at a time and strengthen your guild.</p>' +
+            '<p class="muted">Level ' + state.tavernLevel + " recruits roll stats from " + range.min + "-" + range.max + ".</p>" +
             '<div class="sheet-list">' + offers + "</div>" +
           "</div>" +
         "</section>";
     }
 
     var adventurers = state.adventurers.map(function (adventurer) {
-      return renderAdventurerCard(adventurer, state.currentParty.indexOf(adventurer.id) !== -1, false);
+      return renderAdventurerCard(adventurer, state, false);
     }).join("");
 
     return '' +
       '<section class="sheet-overlay" data-action="close-panel">' +
         '<div class="sheet-panel" data-stop-click="true">' +
           '<div class="sheet-head"><h3>Roster</h3><button class="close-x" data-action="close-panel">Close</button></div>' +
-          '<p class="muted">Your guild can field up to ' + window.GameData.maxPartySize + " heroes per mission.</p>" +
+          '<p class="muted">Tired heroes recover on the next day. Injured heroes need two full day cycles.</p>' +
           '<div class="sheet-list">' + adventurers + "</div>" +
         "</div>" +
       "</section>";
   }
 
+  function renderPartySummary(state, party) {
+    var members = window.GameSystems.getPartyMembers(state, party.id);
+    var unavailableCount = members.filter(function (member) {
+      return member.status !== "ready";
+    }).length;
+    return '' +
+      '<div class="party-summary-card">' +
+        "<strong>Party " + party.id + "</strong>" +
+        "<small>" + members.length + "/" + window.GameData.maxPartySize + " heroes | " + window.GameSystems.getPartyPower(state, party.id) + " power</small>" +
+        "<small>" + (unavailableCount ? unavailableCount + " recovering" : "Ready for assignment") + "</small>" +
+      "</div>";
+  }
+
   function renderHub(state) {
     var guildLevel = window.GameSystems.getGuildLevel(state);
+    var partyCapacity = window.GameSystems.getPartyCapacity(state);
     return '' +
       '<section class="screen hub-screen">' +
-        renderTopGold(state) +
+        renderTopBar(state, true) +
         '<div class="guild-banner panel-card">' +
           '<p class="eyebrow">Guild Level ' + guildLevel + "</p>" +
           "<h2>Your guild is growing stronger</h2>" +
-          '<p class="muted">Completed missions: ' + state.progress.missionsCompleted + " | Recruits hired: " + state.progress.recruitedCount + "</p>" +
+          '<p class="muted">Completed missions: ' + state.progress.missionsCompleted + " | Recruits hired: " + state.progress.recruitedCount + " | Party slots: " + partyCapacity + "</p>" +
+          '<div class="party-summary-grid">' +
+            state.currentParties.map(function (party) {
+              return renderPartySummary(state, party);
+            }).join("") +
+          "</div>" +
         "</div>" +
         '<div class="hub-actions">' +
           '<button class="action-card" data-action="open-panel" data-panel="tavern">' +
             '<span class="action-card__icon">T</span>' +
-            '<span><strong>Tavern</strong><small>Recruit fresh adventurers</small></span>' +
+            '<span><strong>Tavern</strong><small>Recruit stronger heroes as the tavern improves</small></span>' +
           "</button>" +
           '<button class="action-card" data-action="open-panel" data-panel="roster">' +
             '<span class="action-card__icon">R</span>' +
-            '<span><strong>Roster</strong><small>Review your guild lineup</small></span>' +
+            '<span><strong>Roster</strong><small>Review parties, injuries, and recovery pressure</small></span>' +
           "</button>" +
           '<button class="action-card" data-action="go-map">' +
             '<span class="action-card__icon">M</span>' +
@@ -172,7 +227,7 @@
           "</button>" +
           '<button class="action-card" data-action="go-guildhall">' +
             '<span class="action-card__icon">G</span>' +
-            "<span><strong>Guild Hall</strong><small>" + (state.selectedLocationId ? "Prepare the chosen contract" : "Choose a location first") + "</small></span>" +
+            "<span><strong>Guild Hall</strong><small>" + (state.selectedLocationId ? "Manage parties for the selected mission" : "Choose a location first") + "</small></span>" +
           "</button>" +
         "</div>" +
         renderHubPanel(state) +
@@ -197,7 +252,7 @@
         '<p class="muted">' + escapeHtml(location.flavor) + "</p>" +
         '<div class="inline-pill-row">' +
           missions.map(function (mission) {
-            return '<span class="inline-pill inline-pill--' + mission.difficulty.toLowerCase() + '">' + mission.difficulty + " " + mission.dc + "</span>";
+            return '<span class="inline-pill inline-pill--' + mission.difficulty.toLowerCase() + '">' + mission.difficulty + " " + mission.dc + " | " + mission.primaryStat.toUpperCase() + "</span>";
           }).join("") +
         "</div>" +
         '<button class="primary-button" data-action="enter-guildhall">Travel to Guild Hall</button>' +
@@ -218,7 +273,7 @@
 
     return '' +
       '<section class="screen map-screen">' +
-        renderTopGold(state) +
+        renderTopBar(state, true) +
         '<div class="map-header">' +
           "<h2>World Map</h2>" +
           "<p>Select a location</p>" +
@@ -243,7 +298,7 @@
             '<span class="inline-pill inline-pill--' + mission.difficulty.toLowerCase() + '">' + mission.difficulty + "</span>" +
           "</div>" +
           '<p class="muted">' + escapeHtml(mission.summary) + "</p>" +
-          '<div class="mission-meta"><span>DC ' + mission.dc + "</span><span>" + mission.rewardGold + " Gold</span></div>" +
+          '<div class="mission-meta"><span>DC ' + mission.dc + "</span><span>Favors " + mission.primaryStat.toUpperCase() + "</span></div>" +
         "</button>";
     }).join("");
   }
@@ -260,7 +315,7 @@
             '<div class="hero-mark">' + classBadge(member.class) + "</div>" +
             "<div>" +
               "<strong>" + escapeHtml(member.name) + "</strong>" +
-              "<small>" + escapeHtml(member.class) + " | Power " + powerValue(member) + "</small>" +
+              "<small>" + escapeHtml(member.class) + " | Power " + powerValue(member) + " | " + window.GameSystems.getStatusLabel(member) + "</small>" +
             "</div>" +
           "</div>");
       }
@@ -269,45 +324,93 @@
     return slots.join("");
   }
 
+  function renderRiskWarnings(state, partyId) {
+    var warnings = window.GameSystems.getMissionRiskWarnings(state, partyId);
+    if (!warnings.length) {
+      return "";
+    }
+
+    return '' +
+      '<div class="warning-stack">' +
+        warnings.map(function (warning) {
+          return '<p class="warning-note">' + escapeHtml(warning) + "</p>";
+        }).join("") +
+      "</div>";
+  }
+
+  function renderPartyCards(state, mission) {
+    return state.currentParties.map(function (party) {
+      var partyMembers = window.GameSystems.getPartyMembers(state, party.id);
+      var partyPower = window.GameSystems.getPartyPower(state, party.id);
+      var active = String(state.activePartyId) === String(party.id);
+      var hasUnavailableMembers = partyMembers.some(function (member) {
+        return member.status !== "ready";
+      });
+      var difference = mission ? partyPower - mission.dc : 0;
+      var compareClass = difference >= 0 ? "comparison-card--positive" : "comparison-card--negative";
+
+      return '' +
+        '<section class="panel-card party-card ' + (active ? "party-card--active" : "") + '">' +
+          '<div class="section-head">' +
+            "<h3>Party " + party.id + "</h3>" +
+            '<button class="mini-button" data-action="select-party" data-party-id="' + party.id + '">' + (active ? "Managing" : "Manage") + "</button>" +
+          "</div>" +
+          '<p class="muted">Each adventurer can belong to only one party at a time.</p>' +
+          '<div class="party-slots">' + renderPartySlots(partyMembers) + "</div>" +
+          '<div class="power-card"><span>Total Party Power</span><strong>' + partyPower + "</strong></div>" +
+          '<div class="comparison-card ' + compareClass + '">' +
+            "<p>Your Power <strong>" + partyPower + "</strong> vs Difficulty <strong>" + (mission ? mission.dc : "--") + "</strong></p>" +
+            "<small>" + (hasUnavailableMembers ? "This party cannot deploy while members recover." : (difference >= 0 ? "+" + difference + " advantage" : difference + " disadvantage")) + "</small>" +
+          "</div>" +
+          renderRiskWarnings(state, party.id) +
+          '<div class="party-actions">' +
+            '<button class="primary-button" data-action="start-mission" data-party-id="' + party.id + '"' + (!mission ? ' disabled aria-disabled="true"' : "") + ">Run Mission</button>" +
+          "</div>" +
+        "</section>";
+    }).join("");
+  }
+
   function renderGuildHall(state) {
     var location = window.GameSystems.getLocationById(state.selectedLocationId);
     var missions = location ? window.GameSystems.buildMissionsForLocation(location.id) : [];
-    var partyMembers = window.GameSystems.getPartyMembers(state);
-    var partyPower = window.GameSystems.getPartyPower(state);
     var mission = state.currentMission || missions[0] || null;
-    var difference = mission ? partyPower - mission.dc : 0;
+    var activeParty = window.GameSystems.getPartyById(state, state.activePartyId);
 
     return '' +
       '<section class="screen guild-screen">' +
-        renderTopGold(state) +
+        renderTopBar(state, true) +
         '<div class="map-header guild-header">' +
           "<h2>Guild Hall</h2>" +
           "<p>" + (location ? escapeHtml(location.name) : "Select a location from the map") + "</p>" +
         "</div>" +
         '<div class="mission-stack">' + renderMissionChoices(missions, mission) + "</div>" +
         '<section class="panel-card">' +
-          '<div class="section-head"><h3>Party Formation</h3><small>' + partyMembers.length + "/" + window.GameData.maxPartySize + " selected</small></div>" +
-          '<div class="party-slots">' + renderPartySlots(partyMembers) + "</div>" +
-          '<div class="power-card"><span>Total Party Power</span><strong>' + partyPower + "</strong></div>" +
-          '<div class="comparison-card ' + (difference >= 0 ? "comparison-card--positive" : "comparison-card--negative") + '">' +
-            "<p>Your Power <strong>" + partyPower + "</strong> vs Difficulty <strong>" + (mission ? mission.dc : "--") + "</strong></p>" +
-            "<small>" + (difference >= 0 ? "+" + difference + " advantage" : difference + " disadvantage") + "</small>" +
-          "</div>" +
+          '<div class="section-head"><h3>Assignment Board</h3><small>Active party: ' + (activeParty ? activeParty.id : "-") + "</small></div>" +
+          '<p class="muted">Match the mission focus, stack class synergy, and avoid burning your best roster at the wrong time.</p>' +
+          (mission ? '<div class="focus-banner">Mission favors: ' + escapeHtml(mission.primaryStat.toUpperCase()) + " (" + escapeHtml(window.GameSystems.getStatLabel(mission.primaryStat)) + ")</div>" : "") +
         "</section>" +
+        '<div class="party-card-list">' + renderPartyCards(state, mission) + "</div>" +
         '<section class="panel-card">' +
-          '<div class="section-head"><h3>Available Adventurers</h3><small>Tap to assign or remove</small></div>' +
+          '<div class="section-head"><h3>Available Adventurers</h3><small>Tired and injured heroes cannot be assigned</small></div>' +
           '<div class="roster-list">' +
             state.adventurers.map(function (adventurer) {
-              return renderAdventurerCard(adventurer, state.currentParty.indexOf(adventurer.id) !== -1, true);
+              return renderAdventurerCard(adventurer, state, true);
             }).join("") +
           "</div>" +
         "</section>" +
         '<div class="action-row stacked-row">' +
-          '<button class="primary-button" data-action="start-mission"' + (!mission ? ' disabled aria-disabled="true"' : "") + ">Start Mission</button>" +
           '<button class="ghost-button" data-action="go-map">Back to Map</button>' +
         "</div>" +
         renderBottomNav("guildHall", state.selectedLocationId) +
       "</section>";
+  }
+
+  function renderBreakdownRow(label, value, accentClass) {
+    return '' +
+      '<div class="breakdown-row">' +
+        "<span>" + escapeHtml(label) + "</span>" +
+        '<strong class="' + (accentClass || "") + '">' + escapeHtml(String(value)) + "</strong>" +
+      "</div>";
   }
 
   function renderResult(state) {
@@ -330,16 +433,22 @@
     return '' +
       '<section class="screen result-screen">' +
         '<div class="result-card ' + toneClass + '">' +
-          '<p class="eyebrow">' + escapeHtml(result.locationName) + "</p>" +
+          '<p class="eyebrow">' + escapeHtml(result.locationName) + " | Party " + result.partyId + "</p>" +
           "<h2>" + escapeHtml(result.missionName) + "</h2>" +
-          '<div class="result-grid">' +
-            "<div><span>Roll</span><strong>" + result.roll + "</strong></div>" +
-            "<div><span>Luck</span><strong>" + (result.luck >= 0 ? "+" : "") + result.luck + "</strong></div>" +
-            "<div><span>Party Power</span><strong>" + result.partyPower + "</strong></div>" +
-            "<div><span>DC</span><strong>" + result.dc + "</strong></div>" +
-          "</div>" +
-          '<div class="total-box"><span>Total Score</span><strong>' + result.total + "</strong></div>" +
           '<div class="outcome-banner">' + escapeHtml(result.outcomeLabel) + "</div>" +
+          '<p class="result-report">' + escapeHtml(result.report) + "</p>" +
+          '<div class="panel-card result-breakdown">' +
+            '<div class="section-head"><h3>Result Breakdown</h3><small>Mission favors ' + escapeHtml(result.primaryStatLabel.toUpperCase()) + "</small></div>" +
+            renderBreakdownRow("Base power", result.basePower) +
+            renderBreakdownRow("Roll", result.roll) +
+            renderBreakdownRow("Luck", (result.luck >= 0 ? "+" : "") + result.luck) +
+            renderBreakdownRow("Stat bonus", "+" + result.statBonus) +
+            renderBreakdownRow("Synergy bonus", "+" + result.synergyBonus) +
+            renderBreakdownRow("Class bonus", "+" + result.classBonus) +
+            renderBreakdownRow("Needed", result.dc) +
+            renderBreakdownRow("You got", result.total) +
+            renderBreakdownRow("Difference", (result.difference >= 0 ? "+" : "") + result.difference, result.difference >= 0 ? "value-positive" : "value-negative") +
+          "</div>" +
           '<div class="reward-line"><span>Reward</span><strong>' + result.rewardGold + " Gold</strong></div>" +
           '<button class="primary-button" data-action="continue-loop">Continue to Hub</button>' +
         "</div>" +

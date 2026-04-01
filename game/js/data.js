@@ -6,7 +6,17 @@
       class: heroClass,
       atk: atk,
       def: def,
-      spd: spd
+      spd: spd,
+      status: "ready",
+      injuryDaysRemaining: 0
+    };
+  }
+
+  function mission(title, summary, primaryStat) {
+    return {
+      title: title,
+      summary: summary,
+      primaryStat: primaryStat
     };
   }
 
@@ -16,6 +26,11 @@
       Easy: { dc: 10, rewardGold: 90, badge: "easy" },
       Medium: { dc: 15, rewardGold: 140, badge: "medium" },
       Hard: { dc: 20, rewardGold: 210, badge: "hard" }
+    },
+    statLabels: {
+      atk: "Attack",
+      def: "Defense",
+      spd: "Speed"
     },
     classDetails: {
       Warrior: { short: "W", flavor: "Front line bruiser" },
@@ -29,20 +44,45 @@
       adventurer("sylvia-healer", "Sylvia the Healer", "Healer", 2, 3, 2),
       adventurer("finn-rogue", "Finn the Rogue", "Rogue", 3, 1, 4)
     ],
-    recruitPool: [
-      adventurer("bjorn-warrior", "Bjorn the Warrior", "Warrior", 4, 3, 1),
-      adventurer("elara-mage", "Elara Starflame", "Mage", 5, 1, 3),
-      adventurer("tamsin-healer", "Tamsin Dawnveil", "Healer", 2, 4, 2),
-      adventurer("nyx-rogue", "Nyx Shadowstep", "Rogue", 4, 1, 5),
-      adventurer("gideon-warrior", "Gideon Ironwall", "Warrior", 3, 4, 1),
-      adventurer("mira-mage", "Mira Emberglass", "Mage", 4, 2, 4),
-      adventurer("ione-healer", "Ione Mercybloom", "Healer", 2, 5, 2),
-      adventurer("kael-rogue", "Kael Quickhand", "Rogue", 4, 2, 4),
-      adventurer("sera-warrior", "Sera Goldshield", "Warrior", 4, 3, 2),
-      adventurer("orin-mage", "Orin Moonspark", "Mage", 5, 1, 2),
-      adventurer("vesper-healer", "Vesper Kindroot", "Healer", 3, 4, 3),
-      adventurer("cato-rogue", "Cato Nightmark", "Rogue", 5, 1, 4)
-    ],
+    tavernStatRanges: {
+      1: { min: 3, max: 8 },
+      2: { min: 5, max: 10 },
+      3: { min: 7, max: 12 }
+    },
+    recruitNamePools: {
+      Warrior: [
+        "Bjorn the Warrior",
+        "Sera Goldshield",
+        "Gideon Ironwall",
+        "Rhea Stormblade",
+        "Torvin Redcrest",
+        "Maeve Lionguard"
+      ],
+      Mage: [
+        "Elara Starflame",
+        "Mira Emberglass",
+        "Orin Moonspark",
+        "Cassia Runeveil",
+        "Veyra Spellwake",
+        "Talin Ashmire"
+      ],
+      Healer: [
+        "Tamsin Dawnveil",
+        "Ione Mercybloom",
+        "Vesper Kindroot",
+        "Liora Sunmend",
+        "Pella Softwind",
+        "Nerin Gracewell"
+      ],
+      Rogue: [
+        "Nyx Shadowstep",
+        "Kael Quickhand",
+        "Cato Nightmark",
+        "Sable Duskrun",
+        "Riven Lockpick",
+        "Mara Swiftcloak"
+      ]
+    },
     locations: [
       { id: "northwatch", name: "Northwatch", type: "town", x: 14, y: 24, flavor: "A cold frontier settlement guarding the northern pass." },
       { id: "harfang", name: "Harfang", type: "capital", x: 20, y: 33, flavor: "A bustling capital where noble contracts are plentiful." },
@@ -60,58 +100,58 @@
     missionTemplates: {
       town: {
         Easy: [
-          { title: "Roadside Patrol", summary: "Escort a merchant road and repel petty bandits." },
-          { title: "Wolf Cull", summary: "Thin a hungry pack stalking the outer farms." }
+          mission("Roadside Patrol", "Escort a merchant road and repel petty bandits.", "spd"),
+          mission("Wolf Cull", "Thin a hungry pack stalking the outer farms.", "atk")
         ],
         Medium: [
-          { title: "Bandit Sweep", summary: "Break a camp that has been extorting locals." },
-          { title: "Smuggler Sting", summary: "Catch a black-market ring before dawn." }
+          mission("Bandit Sweep", "Break a camp that has been extorting locals.", "atk"),
+          mission("Smuggler Sting", "Catch a black-market ring before dawn.", "spd")
         ],
         Hard: [
-          { title: "Night Siege", summary: "Hold the town gate through a brutal moonless assault." },
-          { title: "Beast Hunt", summary: "Bring down a monster that already ruined two patrols." }
+          mission("Night Siege", "Hold the town gate through a brutal moonless assault.", "def"),
+          mission("Beast Hunt", "Bring down a monster that already ruined two patrols.", "atk")
         ]
       },
       capital: {
         Easy: [
-          { title: "Ward Security", summary: "Guard civic workers while they restore order." },
-          { title: "Pilgrim Escort", summary: "Lead travelers safely across tense district lines." }
+          mission("Ward Security", "Guard civic workers while they restore order.", "def"),
+          mission("Pilgrim Escort", "Lead travelers safely across tense district lines.", "spd")
         ],
         Medium: [
-          { title: "Guild Contract", summary: "Settle a violent dispute between rival factions." },
-          { title: "Treasury Recovery", summary: "Recover stolen taxes before they disappear underground." }
+          mission("Guild Contract", "Settle a violent dispute between rival factions.", "atk"),
+          mission("Treasury Recovery", "Recover stolen taxes before they disappear underground.", "spd")
         ],
         Hard: [
-          { title: "Citadel Defense", summary: "Hold a breached district until reinforcements arrive." },
-          { title: "Shadow Coup", summary: "Expose and break a conspiracy inside the ruling court." }
+          mission("Citadel Defense", "Hold a breached district until reinforcements arrive.", "def"),
+          mission("Shadow Coup", "Expose and break a conspiracy inside the ruling court.", "spd")
         ]
       },
       stronghold: {
         Easy: [
-          { title: "Outer Watch", summary: "Rotate with sentries and answer a probing attack." },
-          { title: "Supply Run", summary: "Deliver supplies through contested territory." }
+          mission("Outer Watch", "Rotate with sentries and answer a probing attack.", "def"),
+          mission("Supply Run", "Deliver supplies through contested territory.", "spd")
         ],
         Medium: [
-          { title: "Wall Breach", summary: "Patch a broken flank while enemies pour in." },
-          { title: "Knightly Trial", summary: "Complete a dangerous proving contract for the keep." }
+          mission("Wall Breach", "Patch a broken flank while enemies pour in.", "def"),
+          mission("Knightly Trial", "Complete a dangerous proving contract for the keep.", "atk")
         ],
         Hard: [
-          { title: "Fortress Breaker", summary: "Destroy an enemy engine before sunrise." },
-          { title: "Champion Duel", summary: "Face an infamous commander and rout their escort." }
+          mission("Fortress Breaker", "Destroy an enemy engine before sunrise.", "atk"),
+          mission("Champion Duel", "Face an infamous commander and rout their escort.", "def")
         ]
       },
       rift: {
         Easy: [
-          { title: "Rift Scouting", summary: "Survey lesser fiends around the corrupted edges." },
-          { title: "Seal Sparks", summary: "Disrupt a minor ritual before it opens wider." }
+          mission("Rift Scouting", "Survey lesser fiends around the corrupted edges.", "spd"),
+          mission("Seal Sparks", "Disrupt a minor ritual before it opens wider.", "def")
         ],
         Medium: [
-          { title: "Void Cleanse", summary: "Push into cursed ground and secure a ritual circle." },
-          { title: "Relic Retrieval", summary: "Recover a wardstone before cultists claim it." }
+          mission("Void Cleanse", "Push into cursed ground and secure a ritual circle.", "atk"),
+          mission("Relic Retrieval", "Recover a wardstone before cultists claim it.", "spd")
         ],
         Hard: [
-          { title: "Hellgate Pressure", summary: "Survive a full surge and stabilize the breach." },
-          { title: "Demon Vanguard", summary: "Defeat the fiend leading the current incursion." }
+          mission("Hellgate Pressure", "Survive a full surge and stabilize the breach.", "def"),
+          mission("Demon Vanguard", "Defeat the fiend leading the current incursion.", "atk")
         ]
       }
     }
