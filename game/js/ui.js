@@ -1,4 +1,8 @@
 (function () {
+  var TUTORIAL_STORAGE_KEY = "cheekclaptopia-tutorial-v1";
+  var tutorialState = loadTutorialState();
+  var lastAnimatedResultKey = null;
+
   function escapeHtml(value) {
     return String(value)
       .replace(/&/g, "&amp;")
@@ -6,6 +10,10 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function clone(value) {
+    return JSON.parse(JSON.stringify(value));
   }
 
   function powerValue(adventurer) {
@@ -18,10 +26,233 @@
 
   function renderParticles() {
     var particles = [];
-    for (var index = 0; index < 12; index += 1) {
+    var index;
+
+    for (index = 0; index < 12; index += 1) {
       particles.push('<span class="particle particle-' + index + '"></span>');
     }
+
     return particles.join("");
+  }
+
+  function loadTutorialState() {
+    try {
+      var raw = window.localStorage.getItem(TUTORIAL_STORAGE_KEY);
+      if (!raw) {
+        return {
+          step: 0,
+          hasCompletedTutorial: false
+        };
+      }
+
+      return Object.assign({
+        step: 0,
+        hasCompletedTutorial: false
+      }, JSON.parse(raw));
+    } catch (error) {
+      return {
+        step: 0,
+        hasCompletedTutorial: false
+      };
+    }
+  }
+
+  function saveTutorialState() {
+    try {
+      window.localStorage.setItem(TUTORIAL_STORAGE_KEY, JSON.stringify(tutorialState));
+    } catch (error) {
+      return null;
+    }
+    return null;
+  }
+
+  function getTutorialSteps() {
+    return [
+      {
+        targetId: "tavern",
+        screens: ["hub"],
+        title: "Build Your Guild",
+        body: "Recruit adventurers to build your team."
+      },
+      {
+        targetId: "party",
+        screens: ["guildHall"],
+        title: "Form A Party",
+        body: "Assign adventurers to a party."
+      },
+      {
+        targetId: "mission",
+        screens: ["guildHall"],
+        title: "Send The Contract",
+        body: "Resolve a mission once your party is ready."
+      },
+      {
+        targetId: "result",
+        screens: ["result"],
+        title: "Read The Outcome",
+        body: "Review the outcome and rewards."
+      }
+    ];
+  }
+
+  function getActiveTutorialStep(state) {
+    var steps = getTutorialSteps();
+    var step = steps[tutorialState.step] || null;
+
+    if (!state || !state.progress || !state.progress.started || tutorialState.hasCompletedTutorial || !step) {
+      return null;
+    }
+
+    if (step.screens.indexOf(state.currentScreen) === -1) {
+      return null;
+    }
+
+    return clone(step);
+  }
+
+  function advanceTutorial() {
+    var steps = getTutorialSteps();
+
+    if (tutorialState.hasCompletedTutorial) {
+      return false;
+    }
+
+    tutorialState.step += 1;
+    if (tutorialState.step >= steps.length) {
+      tutorialState.step = steps.length - 1;
+      tutorialState.hasCompletedTutorial = true;
+    }
+    saveTutorialState();
+    return true;
+  }
+
+  function completeTutorial() {
+    if (tutorialState.hasCompletedTutorial) {
+      return false;
+    }
+
+    tutorialState.hasCompletedTutorial = true;
+    saveTutorialState();
+    return true;
+  }
+
+  function syncTutorialAfterAction(action, stateBefore, stateAfter) {
+    if (!stateAfter || !stateAfter.progress || !stateAfter.progress.started || tutorialState.hasCompletedTutorial) {
+      return false;
+    }
+
+    if (action === "tutorial-next") {
+      return advanceTutorial();
+    }
+
+    if (action === "tutorial-skip") {
+      return completeTutorial();
+    }
+
+    if (tutorialState.step === 0 && action === "open-panel" && stateAfter.activeHubPanel === "tavern") {
+      return advanceTutorial();
+    }
+
+    if (tutorialState.step === 0 && action === "recruit") {
+      return advanceTutorial();
+    }
+
+    if (tutorialState.step === 1 && action === "toggle-party") {
+      return advanceTutorial();
+    }
+
+    if (tutorialState.step === 2 && action === "start-mission" && stateAfter.currentScreen === "result") {
+      return advanceTutorial();
+    }
+
+    if (tutorialState.step === 3 && action === "continue-loop") {
+      return completeTutorial();
+    }
+
+    return false;
+  }
+
+  function currentResultKey(state) {
+    if (!state || !state.lastResult) {
+      return "";
+    }
+
+    return [
+      state.lastResult.missionId,
+      state.lastResult.total,
+      state.lastResult.rewardGold,
+      state.lastResult.outcome
+    ].join("|");
+  }
+
+  function formatSigned(value) {
+    return (value >= 0 ? "+" : "") + value;
+  }
+
+  function formatCountValue(value, prefix, suffix) {
+    return (prefix || "") + Number(value).toLocaleString() + (suffix || "");
+  }
+
+  function animateCountUp(element) {
+    var targetValue = Number(element.getAttribute("data-countup-value") || 0);
+    var prefix = element.getAttribute("data-countup-prefix") || "";
+    var suffix = element.getAttribute("data-countup-suffix") || "";
+    var duration = Number(element.getAttribute("data-countup-duration") || 850);
+    var startTime = null;
+
+    function frame(timestamp) {
+      var progress;
+      var eased;
+      var currentValue;
+
+      if (startTime === null) {
+        startTime = timestamp;
+      }
+
+      progress = Math.min(1, (timestamp - startTime) / duration);
+      eased = 1 - Math.pow(1 - progress, 3);
+      currentValue = Math.round(targetValue * eased);
+      element.textContent = formatCountValue(currentValue, prefix, suffix);
+
+      if (progress < 1) {
+        window.requestAnimationFrame(frame);
+      } else {
+        element.textContent = formatCountValue(targetValue, prefix, suffix);
+      }
+    }
+
+    window.requestAnimationFrame(frame);
+  }
+
+  function afterRender(state) {
+    var resultKey;
+    var countUpElements;
+
+    if (!state || state.currentScreen !== "result" || !state.lastResult) {
+      return;
+    }
+
+    resultKey = currentResultKey(state);
+    if (resultKey === lastAnimatedResultKey) {
+      return;
+    }
+
+    lastAnimatedResultKey = resultKey;
+    countUpElements = document.querySelectorAll("[data-countup-value]");
+    countUpElements.forEach(animateCountUp);
+  }
+
+  function rerenderCurrentState(forceResultAnimation) {
+    if (!window.GameState || !window.GameState.getState) {
+      return;
+    }
+
+    var state = window.GameState.getState();
+    if (forceResultAnimation) {
+      lastAnimatedResultKey = null;
+    }
+    render(state);
+    afterRender(state);
   }
 
   function renderToast(toast) {
@@ -32,6 +263,31 @@
     return '<div class="toast">' + escapeHtml(toast.message) + "</div>";
   }
 
+  function renderTutorialOverlay(state) {
+    var step = getActiveTutorialStep(state);
+    var steps = getTutorialSteps();
+    var primaryLabel;
+
+    if (!step) {
+      return "";
+    }
+
+    primaryLabel = tutorialState.step === steps.length - 1 ? "Finish" : "Next";
+
+    return '' +
+      '<div class="tutorial-overlay">' +
+        '<div class="tutorial-card">' +
+          '<p class="eyebrow">Tutorial ' + (tutorialState.step + 1) + " / " + steps.length + "</p>" +
+          "<h3>" + escapeHtml(step.title) + "</h3>" +
+          '<p class="tutorial-copy">' + escapeHtml(step.body) + "</p>" +
+          '<div class="tutorial-actions">' +
+            '<button class="ghost-button mini-button" data-action="tutorial-skip">Skip</button>' +
+            '<button class="primary-button mini-button" data-action="tutorial-next">' + primaryLabel + "</button>" +
+          "</div>" +
+        "</div>" +
+      "</div>";
+  }
+
   function renderShell(content, state) {
     return '' +
       '<div class="app-shell">' +
@@ -40,19 +296,61 @@
         '<main class="app-frame">' +
           content +
           renderToast(state.toast) +
+          renderTutorialOverlay(state) +
         "</main>" +
       "</div>";
   }
 
+  function tutorialTargetClass(state, targetId) {
+    var step = getActiveTutorialStep(state);
+    return step && step.targetId === targetId ? " tutorial-target tutorial-target--active" : "";
+  }
+
+  function renderInfoTip(text) {
+    return '<p class="info-tip">' + escapeHtml(text) + "</p>";
+  }
+
+  function getOutcomeHeadline(result) {
+    var positiveOutcomes = ["criticalSuccess", "perfectSuccess", "success", "partialSuccess"];
+
+    if (result.isBoss && positiveOutcomes.indexOf(result.outcome) !== -1) {
+      return "A legendary challenge overcome.";
+    }
+
+    if (result.outcome === "criticalFailure") {
+      return "A devastating failure.";
+    }
+
+    if (positiveOutcomes.indexOf(result.outcome) !== -1) {
+      return "Victory secured.";
+    }
+
+    return "The mission failed.";
+  }
+
+  function getOutcomeCaption(result) {
+    if (result.isBoss) {
+      return "Boss contract";
+    }
+    if (result.outcome === "criticalSuccess") {
+      return "Critical success";
+    }
+    if (result.outcome === "criticalFailure") {
+      return "Critical failure";
+    }
+    return result.outcomeLabel;
+  }
+
   function renderStart(state) {
     var continueDisabled = !state.hasSave ? 'disabled aria-disabled="true"' : "";
+
     return '' +
       '<section class="screen start-screen">' +
         '<div class="hero-crest">Guild</div>' +
         '<div class="title-wrap">' +
           '<p class="eyebrow">Dark fantasy mobile MVP</p>' +
           "<h1>Grand Adventures Guild of Cheekclaptopia</h1>" +
-          "<p class=\"subcopy\">Every contract now rewards smart team building, correct mission matching, and careful recovery planning.</p>" +
+          "<p class=\"subcopy\">Smart party building, readable mission pressure, and satisfying contract payoffs.</p>" +
         "</div>" +
         '<div class="start-actions">' +
           '<button class="primary-button" data-action="new-game">New Game</button>' +
@@ -63,8 +361,9 @@
       "</section>";
   }
 
-  function renderTopBar(state, showEndDay) {
+  function renderTopBar(state, showAdvanceDay) {
     var progress = window.GameSystems.getGuildProgress(state);
+
     return '' +
       '<div class="top-strip top-strip--wide">' +
         '<div class="top-strip__stats">' +
@@ -81,12 +380,13 @@
             "<strong>" + (progress.nextThreshold ? (state.totalGoldSpent + " / " + progress.nextThreshold) : "Max") + "</strong>" +
           "</div>" +
         "</div>" +
-        (showEndDay ? '<button class="end-day-button" data-action="end-day">End Day</button>' : "") +
+        (showAdvanceDay ? '<button class="end-day-button" data-action="end-day">Advance Day</button>' : "") +
       "</div>";
   }
 
   function renderBottomNav(currentScreen, selectedLocationId) {
     var guildDisabled = !selectedLocationId ? 'disabled aria-disabled="true"' : "";
+
     return '' +
       '<nav class="bottom-nav">' +
         '<button class="nav-button ' + (currentScreen === "hub" ? "is-active" : "") + '" data-action="go-hub">Hub</button>' +
@@ -94,6 +394,42 @@
         '<button class="nav-button ' + (currentScreen === "guildHall" ? "is-active" : "") + '" data-action="go-guildhall" ' + guildDisabled + ">Guild Hall</button>" +
         '<button class="nav-button ' + (currentScreen === "settings" ? "is-active" : "") + '" data-action="open-settings">Settings</button>' +
       "</nav>";
+  }
+
+  function getMissionTypeHint(missionType) {
+    return {
+      Assault: "Assault rewards strong offense and fast takedowns.",
+      Defense: "Defense values durability and steady pressure control.",
+      Recon: "Recon leans on speed and cleaner scouting rolls.",
+      Escort: "Escort asks for balance and reliable protection.",
+      Raid: "Raid is high pressure, high reward, and dangerous."
+    }[missionType] || "Mission type shapes the best strategy.";
+  }
+
+  function getModifierHint(modifier) {
+    return modifier && modifier.label
+      ? modifier.label + " shifts risk, reward, or dice pressure."
+      : "Modifiers tilt risk, reward, or dice pressure.";
+  }
+
+  function renderMissionPills(mission, includeDifficulty) {
+    var pills = [];
+
+    if (includeDifficulty) {
+      pills.push('<span class="inline-pill inline-pill--' + mission.difficulty.toLowerCase() + '">' + escapeHtml(mission.difficulty) + "</span>");
+    }
+
+    pills.push('<span class="inline-pill inline-pill--type" title="' + escapeHtml(getMissionTypeHint(mission.missionType)) + '">' + escapeHtml(mission.missionTypeLabel || mission.missionType) + "</span>");
+
+    if (mission.specialTag === "[RARE]") {
+      pills.push('<span class="inline-pill inline-pill--rare">' + escapeHtml(mission.specialTag) + "</span>");
+    } else if (mission.specialTag === "[BOSS]") {
+      pills.push('<span class="inline-pill inline-pill--boss">' + escapeHtml(mission.specialTag) + "</span>");
+    }
+
+    pills.push('<span class="inline-pill inline-pill--modifier" title="' + escapeHtml(getModifierHint(mission.modifier)) + '">' + escapeHtml((mission.modifier && mission.modifier.tag) || "[Standard]") + "</span>");
+
+    return pills.join("");
   }
 
   function getPartyAssignment(state, adventurerId) {
@@ -132,28 +468,33 @@
         '<div class="roster-card__body">' +
           "<strong>" + escapeHtml(adventurer.name) + "</strong>" +
           "<p>" + escapeHtml(adventurer.class) + " | Power " + powerValue(adventurer) + "</p>" +
-          '<p class="stats-line">ATK ' + adventurer.atk + "  DEF " + adventurer.def + "  SPD " + adventurer.spd + "</p>" +
+          '<p class="stats-line" title="ATK breaks lines, DEF absorbs pressure, SPD handles scouting and escape.">ATK ' + adventurer.atk + "  DEF " + adventurer.def + "  SPD " + adventurer.spd + "</p>" +
         "</div>" +
         '<span class="selection-pill">' + escapeHtml(status) + "</span>" +
       "</button>";
   }
 
   function renderHubPanel(state) {
+    var range;
+    var offers;
+    var adventurers;
+
     if (!state.activeHubPanel) {
       return "";
     }
 
     if (state.activeHubPanel === "tavern") {
-      var range = window.GameSystems.getTavernStatRange(state.guildLevel || 1);
-      var offers = state.tavernOffers.length ? state.tavernOffers.map(function (offer) {
+      range = window.GameSystems.getTavernStatRange(state.guildLevel || 1);
+      offers = state.tavernOffers.length ? state.tavernOffers.map(function (offer) {
         var power = powerValue(offer.adventurer);
+
         return '' +
           '<article class="roster-card tavern-card">' +
             '<div class="hero-mark">' + classBadge(offer.adventurer.class) + "</div>" +
             '<div class="roster-card__body">' +
               "<strong>" + escapeHtml(offer.adventurer.name) + "</strong>" +
               "<p>" + escapeHtml(offer.adventurer.class) + " | Power " + power + "</p>" +
-              '<p class="stats-line">ATK ' + offer.adventurer.atk + "  DEF " + offer.adventurer.def + "  SPD " + offer.adventurer.spd + "</p>" +
+              '<p class="stats-line" title="ATK breaks lines, DEF absorbs pressure, SPD handles scouting and escape.">ATK ' + offer.adventurer.atk + "  DEF " + offer.adventurer.def + "  SPD " + offer.adventurer.spd + "</p>" +
             "</div>" +
             '<button class="mini-button" data-action="recruit" data-offer-id="' + offer.id + '">Hire ' + offer.cost + "g</button>" +
           "</article>";
@@ -164,12 +505,13 @@
           '<div class="sheet-panel" data-stop-click="true">' +
             '<div class="sheet-head"><h3>Tavern</h3><button class="close-x" data-action="close-panel">Close</button></div>' +
             '<p class="muted">Guild level ' + state.guildLevel + " brings recruits with " + range.min + "-" + range.max + " stat rolls.</p>" +
+            renderInfoTip("ATK drives assaults, DEF stabilizes pressure, SPD wins scouting and escape routes.") +
             '<div class="sheet-list">' + offers + "</div>" +
           "</div>" +
         "</section>";
     }
 
-    var adventurers = state.adventurers.map(function (adventurer) {
+    adventurers = state.adventurers.map(function (adventurer) {
       return renderAdventurerCard(adventurer, state, false);
     }).join("");
 
@@ -178,6 +520,7 @@
         '<div class="sheet-panel" data-stop-click="true">' +
           '<div class="sheet-head"><h3>Roster</h3><button class="close-x" data-action="close-panel">Close</button></div>' +
           '<p class="muted">Tired heroes recover on the next day. Injured heroes need two full day cycles.</p>' +
+          renderInfoTip("ATK breaks lines, DEF absorbs pressure, SPD handles scouting and escape.") +
           '<div class="sheet-list">' + adventurers + "</div>" +
         "</div>" +
       "</section>";
@@ -188,6 +531,7 @@
     var unavailableCount = members.filter(function (member) {
       return member.status !== "ready";
     }).length;
+
     return '' +
       '<div class="party-summary-card">' +
         "<strong>Party " + party.id + "</strong>" +
@@ -196,8 +540,13 @@
       "</div>";
   }
 
+  function renderSectionDivider() {
+    return '<div class="section-divider" aria-hidden="true"></div>';
+  }
+
   function renderHub(state) {
     var progress = window.GameSystems.getGuildProgress(state);
+
     return '' +
       '<section class="screen hub-screen">' +
         renderTopBar(state, true) +
@@ -213,8 +562,9 @@
             }).join("") +
           "</div>" +
         "</div>" +
+        renderSectionDivider() +
         '<div class="hub-actions">' +
-          '<button class="action-card" data-action="open-panel" data-panel="tavern">' +
+          '<button class="action-card' + tutorialTargetClass(state, "tavern") + '" data-action="open-panel" data-panel="tavern">' +
             '<span class="action-card__icon">T</span>' +
             '<span><strong>Tavern</strong><small>Recruit stronger heroes as the tavern improves</small></span>' +
           "</button>" +
@@ -241,6 +591,9 @@
   }
 
   function renderLocationPanel(state, location) {
+    var missions;
+    var missionSummary;
+
     if (!location) {
       return '' +
         '<div class="map-panel panel-card">' +
@@ -249,18 +602,18 @@
         "</div>";
     }
 
-    var missions = window.GameSystems.getMissionsForLocation(state, location.id);
-    var missionSummary = missions.length ? missions.map(function (mission) {
+    missions = window.GameSystems.getMissionsForLocation(state, location.id);
+    missionSummary = missions.length ? missions.map(function (mission) {
       return '' +
         '<div class="contract-preview">' +
           "<strong>" + escapeHtml(mission.name) + "</strong>" +
+          '<p class="muted">' + escapeHtml(mission.summary) + "</p>" +
           '<div class="inline-pill-row">' +
-            '<span class="inline-pill inline-pill--' + mission.difficulty.toLowerCase() + '">' + mission.difficulty + " " + mission.dc + "</span>" +
-            '<span class="inline-pill inline-pill--modifier">' + escapeHtml((mission.modifier && mission.modifier.tag) || "[Standard]") + "</span>" +
-            '<span class="inline-pill inline-pill--focus">' + escapeHtml(window.GameSystems.getStatLabel(mission.primaryStat)) + "</span>" +
+            renderMissionPills(mission, true) +
+            '<span class="inline-pill inline-pill--focus" title="Mission focus highlights the most valuable stat.">' + escapeHtml(window.GameSystems.getStatLabel(mission.primaryStat)) + "</span>" +
           "</div>" +
         "</div>";
-    }).join("") : '<p class="muted">No contracts are posted here today. End Day to rotate the mission board.</p>';
+    }).join("") : '<p class="muted">No contracts are posted here today. Advance Day to rotate the mission board.</p>';
 
     return '' +
       '<div class="map-panel panel-card">' +
@@ -278,6 +631,7 @@
     var locationCards = window.GameData.locations.map(function (location) {
       var meta = window.GameSystems.getNodeTypeMeta(location.type);
       var active = selectedLocation && selectedLocation.id === location.id ? "node-active" : "";
+
       return '' +
         '<button class="map-node ' + meta.badge + " " + active + '" data-action="select-location" data-location-id="' + location.id + '" style="left:' + location.x + "%; top:" + location.y + '%;">' +
           "<span>" + meta.label.charAt(0) + "</span>" +
@@ -299,21 +653,20 @@
 
   function renderMissionChoices(missions, currentMission) {
     if (!missions.length) {
-      return '<div class="panel-card"><p class="muted">No contracts are available in this region today. End Day to refresh the mission pool.</p></div>';
+      return '<div class="panel-card"><p class="muted">No contracts are available in this region today. Advance Day to refresh the mission pool.</p></div>';
     }
 
     return missions.map(function (mission) {
       var active = currentMission && currentMission.id === mission.id ? " mission-card--active" : "";
+
       return '' +
         '<button class="mission-card' + active + '" data-action="choose-mission" data-mission-id="' + mission.id + '">' +
           '<div class="section-head">' +
             "<h3>" + escapeHtml(mission.name) + "</h3>" +
-            '<div class="inline-pill-row">' +
-              '<span class="inline-pill inline-pill--' + mission.difficulty.toLowerCase() + '">' + mission.difficulty + "</span>" +
-              '<span class="inline-pill inline-pill--modifier">' + escapeHtml((mission.modifier && mission.modifier.tag) || "[Standard]") + "</span>" +
-            "</div>" +
+            '<div class="inline-pill-row">' + renderMissionPills(mission, true) + "</div>" +
           "</div>" +
           '<p class="muted">' + escapeHtml(mission.summary) + "</p>" +
+          '<p class="hint-text">' + escapeHtml(getMissionTypeHint(mission.missionType)) + "</p>" +
           '<div class="mission-meta"><span>DC ' + mission.dc + "</span><span>Favors " + window.GameSystems.getStatLabel(mission.primaryStat) + "</span><span>Reward " + mission.rewardGold + "g</span></div>" +
         "</button>";
     }).join("");
@@ -321,8 +674,11 @@
 
   function renderPartySlots(partyMembers) {
     var slots = [];
-    for (var index = 0; index < window.GameData.maxPartySize; index += 1) {
-      var member = partyMembers[index];
+    var index;
+    var member;
+
+    for (index = 0; index < window.GameData.maxPartySize; index += 1) {
+      member = partyMembers[index];
       if (!member) {
         slots.push('<div class="party-slot"><span>Empty Slot</span></div>');
       } else {
@@ -342,6 +698,7 @@
 
   function renderRiskWarnings(state, partyId) {
     var warnings = window.GameSystems.getMissionRiskWarnings(state, partyId);
+
     if (!warnings.length) {
       return "";
     }
@@ -380,7 +737,7 @@
           "</div>" +
           renderRiskWarnings(state, party.id) +
           '<div class="party-actions">' +
-            '<button class="primary-button" data-action="start-mission" data-party-id="' + party.id + '"' + (!mission ? ' disabled aria-disabled="true"' : "") + ">Run Mission</button>" +
+            '<button class="primary-button" data-action="start-mission" data-party-id="' + party.id + '"' + (!mission ? ' disabled aria-disabled="true"' : "") + ">Resolve Mission</button>" +
           "</div>" +
         "</section>";
     }).join("");
@@ -399,15 +756,21 @@
           "<h2>Guild Hall</h2>" +
           "<p>" + (location ? escapeHtml(location.name) : "Select a location from the map") + "</p>" +
         "</div>" +
-        '<div class="mission-stack">' + renderMissionChoices(missions, mission) + "</div>" +
-        '<section class="panel-card">' +
-          '<div class="section-head"><h3>Assignment Board</h3><small>Active party: ' + (activeParty ? activeParty.id : "-") + "</small></div>" +
+        '<div class="mission-stack' + tutorialTargetClass(state, "mission") + '">' +
+          renderMissionChoices(missions, mission) +
+        "</div>" +
+        renderSectionDivider() +
+        '<section class="panel-card' + tutorialTargetClass(state, "party") + '">' +
+          '<div class="section-head"><h3>Assignment Board</h3><small>Active party: ' + (activeParty ? activeParty.id : "-") + '</small></div>' +
           '<p class="muted">Match the mission focus, stack class synergy, and avoid burning your best roster at the wrong time.</p>' +
-          (mission ? '<div class="focus-banner">Mission favors: ' + escapeHtml(window.GameSystems.getStatLabel(mission.primaryStat).toUpperCase()) + " | " + escapeHtml((mission.modifier && mission.modifier.tag) || "[Standard]") + "</div>" : '<div class="focus-banner">No contract is active for this region today.</div>') +
+          renderInfoTip("Mission type shows the contract style. Modifiers tilt risk, reward, or dice pressure.") +
+          (mission ? '<div class="focus-banner">' + escapeHtml((mission.missionTypeLabel || mission.missionType).toUpperCase()) + " | Favors " + escapeHtml(window.GameSystems.getStatLabel(mission.primaryStat).toUpperCase()) + (mission.specialTag ? " | " + escapeHtml(mission.specialTag) : "") + " | " + escapeHtml((mission.modifier && mission.modifier.tag) || "[Standard]") + "</div>" : '<div class="focus-banner">No contract is active for this region today.</div>') +
         "</section>" +
         '<div class="party-card-list">' + renderPartyCards(state, mission) + "</div>" +
+        renderSectionDivider() +
         '<section class="panel-card">' +
           '<div class="section-head"><h3>Available Adventurers</h3><small>Tired and injured heroes cannot be assigned</small></div>' +
+          renderInfoTip("ATK breaks lines, DEF absorbs pressure, SPD handles scouting and escape.") +
           '<div class="roster-list">' +
             state.adventurers.map(function (adventurer) {
               return renderAdventurerCard(adventurer, state, true);
@@ -429,18 +792,40 @@
       "</div>";
   }
 
+  function renderResultDetails(result, strategyBonus) {
+    return '' +
+      '<details class="result-details">' +
+        '<summary>Bonus details</summary>' +
+        '<div class="result-details__rows">' +
+          renderBreakdownRow("Stat bonus", formatSigned(result.statBonus)) +
+          renderBreakdownRow("Synergy bonus", formatSigned(result.synergyBonus)) +
+          renderBreakdownRow("Class bonus", formatSigned(result.classBonus)) +
+          renderBreakdownRow("Strategy total", formatSigned(strategyBonus)) +
+        "</div>" +
+      "</details>";
+  }
+
   function renderResult(state) {
     var result = state.lastResult;
+    var modifier;
+    var strategyBonus;
+    var toneClass;
+    var impactClass;
+    var headline;
+
     if (!result) {
       return '<section class="screen result-screen"><div class="panel-card"><p class="muted">No mission result yet.</p></div></section>';
     }
-    var modifier = result.modifier || {
+
+    modifier = result.modifier || {
       tag: "[Standard]",
       label: "Standard"
     };
-    var modifierRollBonus = typeof result.modifierRollBonus === "number" ? result.modifierRollBonus : 0;
+    strategyBonus = result.statBonus + result.synergyBonus + result.classBonus;
+    toneClass = "result-tone--failure";
+    impactClass = result.outcome === "criticalFailure" || result.isBoss ? " result-card--impact" : "";
+    headline = getOutcomeHeadline(result);
 
-    var toneClass = "result-tone--failure";
     if (result.outcome === "criticalSuccess") {
       toneClass = "result-tone--critical";
     } else if (result.outcome === "perfectSuccess") {
@@ -453,26 +838,41 @@
 
     return '' +
       '<section class="screen result-screen">' +
-        '<div class="result-card ' + toneClass + '">' +
-          '<p class="eyebrow">' + escapeHtml(result.locationName) + " | Party " + result.partyId + " | " + escapeHtml(modifier.tag) + "</p>" +
+        '<div class="result-card ' + toneClass + impactClass + tutorialTargetClass(state, "result") + '">' +
+          '<p class="eyebrow">' + escapeHtml(result.locationName) + " | Party " + result.partyId + (result.specialTag ? " | " + escapeHtml(result.specialTag) : "") + "</p>" +
           "<h2>" + escapeHtml(result.missionName) + "</h2>" +
-          '<div class="outcome-banner">' + escapeHtml(result.outcomeLabel) + "</div>" +
+          '<div class="inline-pill-row result-pill-row">' +
+            '<span class="inline-pill inline-pill--type" title="' + escapeHtml(getMissionTypeHint(result.missionType)) + '">' + escapeHtml(result.missionTypeLabel || result.missionType || "Contract") + "</span>" +
+            '<span class="inline-pill inline-pill--modifier" title="' + escapeHtml(getModifierHint(modifier)) + '">' + escapeHtml(modifier.tag) + "</span>" +
+          "</div>" +
+          '<div class="outcome-banner">' + escapeHtml(headline) + "</div>" +
+          '<p class="result-kicker">' + escapeHtml(getOutcomeCaption(result)) + "</p>" +
+          '<div class="result-total-card">' +
+            '<span>Total Score</span>' +
+            '<strong data-countup-value="' + result.total + '">' + result.total + "</strong>" +
+            '<small>Needed ' + result.dc + " | Difference " + formatSigned(result.difference) + "</small>" +
+          "</div>" +
           '<p class="result-report">' + escapeHtml(result.report) + "</p>" +
+          renderSectionDivider() +
           '<div class="panel-card result-breakdown">' +
             '<div class="section-head"><h3>Result Breakdown</h3><small>Mission favors ' + escapeHtml(result.primaryStatLabel.toUpperCase()) + "</small></div>" +
+            renderBreakdownRow("Contract type", result.missionTypeLabel || result.missionType || "Contract") +
             renderBreakdownRow("Base power", result.basePower) +
-            renderBreakdownRow("Roll", result.roll) +
-            renderBreakdownRow("Luck", (result.luck >= 0 ? "+" : "") + result.luck) +
+            renderBreakdownRow("Resolve Mission", result.roll) +
+            renderBreakdownRow("Luck", formatSigned(result.luck)) +
             renderBreakdownRow("Condition", modifier.label) +
-            renderBreakdownRow("Condition bonus", (modifierRollBonus >= 0 ? "+" : "") + modifierRollBonus) +
-            renderBreakdownRow("Stat bonus", "+" + result.statBonus) +
-            renderBreakdownRow("Synergy bonus", "+" + result.synergyBonus) +
-            renderBreakdownRow("Class bonus", "+" + result.classBonus) +
-            renderBreakdownRow("Needed", result.dc) +
+            renderBreakdownRow("Condition bonus", formatSigned(result.modifierRollBonus || 0)) +
+            renderBreakdownRow("Strategy Bonus", formatSigned(strategyBonus), "value-accent") +
             renderBreakdownRow("You got", result.total) +
-            renderBreakdownRow("Difference", (result.difference >= 0 ? "+" : "") + result.difference, result.difference >= 0 ? "value-positive" : "value-negative") +
+            renderResultDetails(result, strategyBonus) +
           "</div>" +
-          '<div class="reward-line"><span>Reward</span><strong>' + result.rewardGold + " Gold</strong></div>" +
+          '<div class="reward-line">' +
+            "<span>Reward</span>" +
+            '<div class="reward-line__value">' +
+              '<strong data-countup-value="' + result.rewardGold + '" data-countup-suffix=" Gold">' + result.rewardGold + " Gold</strong>" +
+              (result.bonusRewardGold ? '<small>+' + result.bonusRewardGold + " bonus</small>" : "") +
+            "</div>" +
+          "</div>" +
           '<button class="primary-button" data-action="continue-loop">Continue to Hub</button>' +
         "</div>" +
       "</section>";
@@ -494,11 +894,12 @@
 
   function render(state) {
     var root = document.getElementById("app");
+    var screen = "";
+
     if (!root) {
       return;
     }
 
-    var screen = "";
     if (state.currentScreen === "start") {
       screen = renderStart(state);
     } else if (state.currentScreen === "hub") {
@@ -517,6 +918,10 @@
   }
 
   window.GameUI = {
-    render: render
+    afterRender: afterRender,
+    completeTutorial: completeTutorial,
+    render: render,
+    rerenderCurrentState: rerenderCurrentState,
+    syncTutorialAfterAction: syncTutorialAfterAction
   };
 }());
