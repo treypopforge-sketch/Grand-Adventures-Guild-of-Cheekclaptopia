@@ -222,6 +222,15 @@ button:disabled {
   white-space: nowrap;
 }
 
+.end-day-button {
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 190, 57, 0.5);
+  background: rgba(255, 190, 57, 0.12);
+  color: #ffd767;
+}
+
 .primary-button:active,
 .ghost-button:active,
 .danger-button:active,
@@ -237,6 +246,17 @@ button:disabled {
 .top-strip {
   display: flex;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.top-strip--wide {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.top-strip__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -294,6 +314,60 @@ button:disabled {
 .sheet-head h3,
 .section-head h3 {
   margin: 0;
+}
+
+.party-summary-grid,
+.party-card-list {
+  display: grid;
+  gap: 12px;
+}
+
+.party-summary-grid {
+  margin-top: 14px;
+}
+
+.party-summary-card {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 191, 66, 0.18);
+  background: rgba(13, 13, 16, 0.58);
+}
+
+.party-summary-card strong {
+  display: block;
+  color: #ffd767;
+}
+
+.party-summary-card small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.focus-banner,
+.warning-note {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+}
+
+.focus-banner {
+  background: rgba(245, 180, 32, 0.12);
+  border: 1px solid rgba(245, 180, 32, 0.35);
+  color: #ffd767;
+}
+
+.warning-stack {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.warning-note {
+  margin: 0;
+  background: rgba(242, 95, 92, 0.12);
+  border: 1px solid rgba(242, 95, 92, 0.3);
+  color: #ffd0cb;
 }
 
 .hub-actions,
@@ -511,6 +585,11 @@ button:disabled {
   box-shadow: 0 0 0 1px rgba(255, 191, 66, 0.22), var(--shadow);
 }
 
+.party-card--active {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px rgba(255, 191, 66, 0.22), var(--shadow);
+}
+
 .party-slots {
   display: grid;
   gap: 12px;
@@ -535,6 +614,20 @@ button:disabled {
 .roster-card--selected {
   border-color: rgba(255, 191, 66, 0.5);
   background: linear-gradient(180deg, rgba(39, 28, 9, 0.75), rgba(13, 13, 16, 0.88));
+}
+
+.roster-card--assigned-other {
+  border-color: rgba(94, 168, 255, 0.4);
+}
+
+.roster-card--tired {
+  border-color: rgba(242, 95, 92, 0.45);
+  background: linear-gradient(180deg, rgba(48, 11, 14, 0.62), rgba(13, 13, 16, 0.88));
+}
+
+.roster-card--injured {
+  border-color: rgba(255, 120, 87, 0.6);
+  background: linear-gradient(180deg, rgba(62, 10, 10, 0.72), rgba(13, 13, 16, 0.92));
 }
 
 .roster-card__body {
@@ -593,6 +686,10 @@ button:disabled {
   margin-top: 18px;
 }
 
+.party-actions {
+  margin-top: 14px;
+}
+
 .sheet-overlay {
   position: absolute;
   inset: 0;
@@ -649,6 +746,40 @@ button:disabled {
   text-align: center;
 }
 
+.result-breakdown {
+  padding: 18px;
+  text-align: left;
+}
+
+.breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.breakdown-row:last-child {
+  border-bottom: 0;
+}
+
+.breakdown-row span {
+  color: var(--muted);
+}
+
+.breakdown-row strong {
+  color: #fff3ca;
+}
+
+.value-positive {
+  color: #8df0bc !important;
+}
+
+.value-negative {
+  color: #ffb4b0 !important;
+}
+
 .result-grid {
   flex-wrap: wrap;
   justify-content: center;
@@ -679,6 +810,16 @@ button:disabled {
 .reward-line strong {
   color: #ffd767;
   font-size: 1.2rem;
+}
+
+.result-report {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  line-height: 1.5;
 }
 
 .result-tone--critical .outcome-banner {
@@ -748,5 +889,14 @@ button:disabled {
 
   .screen {
     min-height: 900px;
+  }
+
+  .top-strip--wide {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .top-strip__stats {
+    flex: 1;
   }
 }
