@@ -392,6 +392,11 @@ button:disabled {
   text-align: left;
 }
 
+.action-card--warning {
+  border-color: rgba(242, 95, 92, 0.35);
+  background: linear-gradient(180deg, rgba(60, 17, 13, 0.66), rgba(13, 13, 16, 0.84));
+}
+
 .action-card strong,
 .roster-card strong,
 .party-slot strong,
@@ -568,6 +573,36 @@ button:disabled {
 .inline-pill--hard {
   color: #ffb4b0;
   border-color: rgba(239, 91, 87, 0.35);
+}
+
+.inline-pill--modifier {
+  color: #ffdca0;
+  border-color: rgba(255, 208, 128, 0.28);
+  background: rgba(255, 208, 128, 0.08);
+}
+
+.inline-pill--focus {
+  color: #cfe2ff;
+  border-color: rgba(140, 180, 255, 0.28);
+  background: rgba(140, 180, 255, 0.08);
+}
+
+.contract-preview-list {
+  display: grid;
+  gap: 12px;
+}
+
+.contract-preview {
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 191, 66, 0.14);
+  background: rgba(13, 13, 16, 0.58);
+}
+
+.contract-preview strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #ffd767;
 }
 
 .guild-header p {

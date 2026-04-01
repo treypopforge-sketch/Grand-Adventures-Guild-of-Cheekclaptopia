@@ -26,6 +26,8 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
       window.GameState.continueGame();
+    } else if (action === "start-new-run") {
+      window.GameState.startNewRun();
     } else if (action === "open-settings") {
       window.GameState.openSettings();
     } else if (action === "back-from-settings") {
@@ -48,12 +50,16 @@ document.addEventListener("DOMContentLoaded", function () {
       window.GameState.chooseMission(actionElement.getAttribute("data-mission-id"));
     } else if (action === "toggle-party") {
       window.GameState.togglePartyMember(actionElement.getAttribute("data-adventurer-id"));
+    } else if (action === "select-party") {
+      window.GameState.selectParty(actionElement.getAttribute("data-party-id"));
     } else if (action === "start-mission") {
-      window.GameState.startMission();
+      window.GameState.startMission(actionElement.getAttribute("data-party-id"));
     } else if (action === "continue-loop") {
       window.GameState.returnToHub();
     } else if (action === "recruit") {
       window.GameState.recruitFromOffer(actionElement.getAttribute("data-offer-id"));
+    } else if (action === "end-day") {
+      window.GameState.endDay();
     } else if (action === "reset-progress") {
       window.GameState.resetProgress();
     }
