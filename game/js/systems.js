@@ -11,6 +11,22 @@
     return list[randomInt(0, list.length - 1)];
   }
 
+  function shuffle(list) {
+    var copy = list.slice();
+    var index;
+    var swapIndex;
+    var temp;
+
+    for (index = copy.length - 1; index > 0; index -= 1) {
+      swapIndex = randomInt(0, index);
+      temp = copy[index];
+      copy[index] = copy[swapIndex];
+      copy[swapIndex] = temp;
+    }
+
+    return copy;
+  }
+
   function calculatePower(adventurer) {
     var power = adventurer.atk + (adventurer.def * 0.7) + (adventurer.spd * 0.5);
     return Math.round(power);
@@ -48,9 +64,20 @@
         difficulty: difficultyLabel,
         dc: config.dc,
         rewardGold: config.rewardGold,
-        primaryStat: template.primaryStat
+        primaryStat: template.primaryStat,
+        modifier: window.GameData.missionModifiers[0]
       };
     });
+  }
+
+  function getMissionsForLocation(state, locationId) {
+    if (state && Array.isArray(state.currentMissions) && state.currentMissions.length) {
+      return state.currentMissions.filter(function (mission) {
+        return mission.locationId === locationId;
+      });
+    }
+
+    return buildMissionsForLocation(locationId);
   }
 
   function getAdventurerById(adventurers, adventurerId) {
@@ -208,6 +235,33 @@
     return offers;
   }
 
+  function generateDailyMissions() {
+    var missionCount = randomInt(3, 5);
+    var locations = shuffle(window.GameData.locations).slice(0, missionCount);
+    var modifiers = window.GameData.missionModifiers || [];
+
+    return locations.map(function (location, index) {
+      var baseMissions = buildMissionsForLocation(location.id);
+      var baseMission = randomFrom(baseMissions);
+      var modifier = randomFrom(modifiers);
+      var baseReward = baseMission.rewardGold + randomInt(-10, 30);
+      var rewardGold = Math.max(50, Math.round(baseReward * modifier.rewardMultiplier));
+      var adjustedDc = Math.max(8, baseMission.dc + randomInt(-1, 1) + modifier.dcDelta);
+
+      return {
+        id: "daily-" + location.id + "-" + index + "-" + Date.now(),
+        locationId: location.id,
+        name: baseMission.name,
+        summary: baseMission.summary,
+        difficulty: baseMission.difficulty,
+        dc: adjustedDc,
+        rewardGold: rewardGold,
+        primaryStat: baseMission.primaryStat,
+        modifier: clone(modifier)
+      };
+    });
+  }
+
   function getStatLabel(statKey) {
     return (window.GameData.statLabels && window.GameData.statLabels[statKey]) || statKey.toUpperCase();
   }
@@ -321,14 +375,16 @@
 
     var partyMembers = getPartyMembers(state, party.id);
     var basePower = getPartyPower(state, party.id);
+    var modifier = state.currentMission.modifier || window.GameData.missionModifiers[0];
     var roll = randomInt(1, 20);
-    var luck = randomInt(-5, 5);
+    var luck = randomInt(modifier.luckMin, modifier.luckMax);
     var statTotal = getPartyStatTotal(state, party.id, state.currentMission.primaryStat);
     var statBonus = Math.floor(statTotal / 5);
     var synergyBonus = getSynergyBonus(partyMembers);
     var classBundle = getClassBonusBundle(partyMembers, luck);
     var classBonus = classBundle.total;
-    var total = basePower + roll + luck + statBonus + synergyBonus + classBonus;
+    var modifierRollBonus = modifier.rollBonus || 0;
+    var total = basePower + roll + luck + statBonus + synergyBonus + classBonus + modifierRollBonus;
     var dc = state.currentMission.dc;
     var outcome = "failure";
 
@@ -360,10 +416,12 @@
       basePower: basePower,
       roll: roll,
       luck: luck,
+      modifierRollBonus: modifierRollBonus,
       statBonus: statBonus,
       statTotal: statTotal,
       primaryStat: state.currentMission.primaryStat,
       primaryStatLabel: getStatLabel(state.currentMission.primaryStat),
+      modifier: clone(modifier),
       synergyBonus: synergyBonus,
       classBonus: classBonus,
       classBreakdown: classBundle,
@@ -428,6 +486,7 @@
     buildMissionReport: buildMissionReport,
     buildMissionsForLocation: buildMissionsForLocation,
     calculatePower: calculatePower,
+    generateDailyMissions: generateDailyMissions,
     generateTavernOffers: generateTavernOffers,
     getAdventurerById: getAdventurerById,
     getGuildLevel: getGuildLevel,
@@ -435,6 +494,7 @@
     getGuildProgress: getGuildProgress,
     getLocationById: getLocationById,
     getMissionRiskWarnings: getMissionRiskWarnings,
+    getMissionsForLocation: getMissionsForLocation,
     getNodeTypeMeta: getNodeTypeMeta,
     getNextGuildLevelTarget: getNextGuildLevelTarget,
     getPartyById: getPartyById,

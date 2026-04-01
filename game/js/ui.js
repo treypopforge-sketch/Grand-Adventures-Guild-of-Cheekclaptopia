@@ -202,10 +202,11 @@
       '<section class="screen hub-screen">' +
         renderTopBar(state, true) +
         '<div class="guild-banner panel-card">' +
-          '<p class="eyebrow">Guild Level ' + state.guildLevel + "</p>" +
+          '<p class="eyebrow">Guild Level ' + state.guildLevel + " | Day " + state.day + "</p>" +
           "<h2>Your guild is growing stronger</h2>" +
           '<p class="muted">Completed missions: ' + state.progress.missionsCompleted + " | Recruits hired: " + state.progress.recruitedCount + " | Party slots: " + state.maxParties + "</p>" +
           '<p class="muted">Progress: ' + (progress.nextThreshold ? (state.totalGoldSpent + " / " + progress.nextThreshold) : "Max guild level reached") + "</p>" +
+          '<p class="muted">Today\'s contracts: ' + state.currentMissions.length + " | New runs keep guild progression but refresh the campaign.</p>" +
           '<div class="party-summary-grid">' +
             state.currentParties.map(function (party) {
               return renderPartySummary(state, party);
@@ -221,6 +222,10 @@
             '<span class="action-card__icon">R</span>' +
             '<span><strong>Roster</strong><small>Review parties, injuries, and recovery pressure</small></span>' +
           "</button>" +
+          '<button class="action-card action-card--warning" data-action="start-new-run">' +
+            '<span class="action-card__icon">N</span>' +
+            '<span><strong>Start New Run</strong><small>Reset the current run, keep guild progression, and claim a fresh bonus</small></span>' +
+          "</button>" +
           '<button class="action-card" data-action="go-map">' +
             '<span class="action-card__icon">M</span>' +
             '<span><strong>Map</strong><small>Select the next contract region</small></span>' +
@@ -235,7 +240,7 @@
       "</section>";
   }
 
-  function renderLocationPanel(location) {
+  function renderLocationPanel(state, location) {
     if (!location) {
       return '' +
         '<div class="map-panel panel-card">' +
@@ -244,18 +249,26 @@
         "</div>";
     }
 
-    var missions = window.GameSystems.buildMissionsForLocation(location.id);
+    var missions = window.GameSystems.getMissionsForLocation(state, location.id);
+    var missionSummary = missions.length ? missions.map(function (mission) {
+      return '' +
+        '<div class="contract-preview">' +
+          "<strong>" + escapeHtml(mission.name) + "</strong>" +
+          '<div class="inline-pill-row">' +
+            '<span class="inline-pill inline-pill--' + mission.difficulty.toLowerCase() + '">' + mission.difficulty + " " + mission.dc + "</span>" +
+            '<span class="inline-pill inline-pill--modifier">' + escapeHtml((mission.modifier && mission.modifier.tag) || "[Standard]") + "</span>" +
+            '<span class="inline-pill inline-pill--focus">' + escapeHtml(window.GameSystems.getStatLabel(mission.primaryStat)) + "</span>" +
+          "</div>" +
+        "</div>";
+    }).join("") : '<p class="muted">No contracts are posted here today. End Day to rotate the mission board.</p>';
+
     return '' +
       '<div class="map-panel panel-card">' +
         "<p class=\"eyebrow\">" + escapeHtml(window.GameSystems.getNodeTypeMeta(location.type).label) + "</p>" +
         "<h3>" + escapeHtml(location.name) + "</h3>" +
         '<p class="muted">' + escapeHtml(location.flavor) + "</p>" +
-        '<div class="inline-pill-row">' +
-          missions.map(function (mission) {
-            return '<span class="inline-pill inline-pill--' + mission.difficulty.toLowerCase() + '">' + mission.difficulty + " " + mission.dc + " | " + mission.primaryStat.toUpperCase() + "</span>";
-          }).join("") +
-        "</div>" +
-        '<button class="primary-button" data-action="enter-guildhall">Travel to Guild Hall</button>' +
+        '<div class="contract-preview-list">' + missionSummary + "</div>" +
+        '<button class="' + (missions.length ? "primary-button" : "ghost-button") + '" data-action="enter-guildhall"' + (missions.length ? "" : ' disabled aria-disabled="true"') + ">" + (missions.length ? "Travel to Guild Hall" : "No Contracts Today") + "</button>" +
       "</div>";
   }
 
@@ -279,14 +292,14 @@
           "<p>Select a location</p>" +
         "</div>" +
         '<div class="map-surface">' + locationCards + "</div>" +
-        renderLocationPanel(selectedLocation) +
+        renderLocationPanel(state, selectedLocation) +
         renderBottomNav("map", state.selectedLocationId) +
       "</section>";
   }
 
   function renderMissionChoices(missions, currentMission) {
     if (!missions.length) {
-      return '<div class="panel-card"><p class="muted">No mission selected yet.</p></div>';
+      return '<div class="panel-card"><p class="muted">No contracts are available in this region today. End Day to refresh the mission pool.</p></div>';
     }
 
     return missions.map(function (mission) {
@@ -295,10 +308,13 @@
         '<button class="mission-card' + active + '" data-action="choose-mission" data-mission-id="' + mission.id + '">' +
           '<div class="section-head">' +
             "<h3>" + escapeHtml(mission.name) + "</h3>" +
-            '<span class="inline-pill inline-pill--' + mission.difficulty.toLowerCase() + '">' + mission.difficulty + "</span>" +
+            '<div class="inline-pill-row">' +
+              '<span class="inline-pill inline-pill--' + mission.difficulty.toLowerCase() + '">' + mission.difficulty + "</span>" +
+              '<span class="inline-pill inline-pill--modifier">' + escapeHtml((mission.modifier && mission.modifier.tag) || "[Standard]") + "</span>" +
+            "</div>" +
           "</div>" +
           '<p class="muted">' + escapeHtml(mission.summary) + "</p>" +
-          '<div class="mission-meta"><span>DC ' + mission.dc + "</span><span>Favors " + mission.primaryStat.toUpperCase() + "</span></div>" +
+          '<div class="mission-meta"><span>DC ' + mission.dc + "</span><span>Favors " + window.GameSystems.getStatLabel(mission.primaryStat) + "</span><span>Reward " + mission.rewardGold + "g</span></div>" +
         "</button>";
     }).join("");
   }
@@ -372,7 +388,7 @@
 
   function renderGuildHall(state) {
     var location = window.GameSystems.getLocationById(state.selectedLocationId);
-    var missions = location ? window.GameSystems.buildMissionsForLocation(location.id) : [];
+    var missions = location ? window.GameSystems.getMissionsForLocation(state, location.id) : [];
     var mission = state.currentMission || missions[0] || null;
     var activeParty = window.GameSystems.getPartyById(state, state.activePartyId);
 
@@ -387,7 +403,7 @@
         '<section class="panel-card">' +
           '<div class="section-head"><h3>Assignment Board</h3><small>Active party: ' + (activeParty ? activeParty.id : "-") + "</small></div>" +
           '<p class="muted">Match the mission focus, stack class synergy, and avoid burning your best roster at the wrong time.</p>' +
-          (mission ? '<div class="focus-banner">Mission favors: ' + escapeHtml(mission.primaryStat.toUpperCase()) + " (" + escapeHtml(window.GameSystems.getStatLabel(mission.primaryStat)) + ")</div>" : "") +
+          (mission ? '<div class="focus-banner">Mission favors: ' + escapeHtml(window.GameSystems.getStatLabel(mission.primaryStat).toUpperCase()) + " | " + escapeHtml((mission.modifier && mission.modifier.tag) || "[Standard]") + "</div>" : '<div class="focus-banner">No contract is active for this region today.</div>') +
         "</section>" +
         '<div class="party-card-list">' + renderPartyCards(state, mission) + "</div>" +
         '<section class="panel-card">' +
@@ -418,6 +434,11 @@
     if (!result) {
       return '<section class="screen result-screen"><div class="panel-card"><p class="muted">No mission result yet.</p></div></section>';
     }
+    var modifier = result.modifier || {
+      tag: "[Standard]",
+      label: "Standard"
+    };
+    var modifierRollBonus = typeof result.modifierRollBonus === "number" ? result.modifierRollBonus : 0;
 
     var toneClass = "result-tone--failure";
     if (result.outcome === "criticalSuccess") {
@@ -433,7 +454,7 @@
     return '' +
       '<section class="screen result-screen">' +
         '<div class="result-card ' + toneClass + '">' +
-          '<p class="eyebrow">' + escapeHtml(result.locationName) + " | Party " + result.partyId + "</p>" +
+          '<p class="eyebrow">' + escapeHtml(result.locationName) + " | Party " + result.partyId + " | " + escapeHtml(modifier.tag) + "</p>" +
           "<h2>" + escapeHtml(result.missionName) + "</h2>" +
           '<div class="outcome-banner">' + escapeHtml(result.outcomeLabel) + "</div>" +
           '<p class="result-report">' + escapeHtml(result.report) + "</p>" +
@@ -442,6 +463,8 @@
             renderBreakdownRow("Base power", result.basePower) +
             renderBreakdownRow("Roll", result.roll) +
             renderBreakdownRow("Luck", (result.luck >= 0 ? "+" : "") + result.luck) +
+            renderBreakdownRow("Condition", modifier.label) +
+            renderBreakdownRow("Condition bonus", (modifierRollBonus >= 0 ? "+" : "") + modifierRollBonus) +
             renderBreakdownRow("Stat bonus", "+" + result.statBonus) +
             renderBreakdownRow("Synergy bonus", "+" + result.synergyBonus) +
             renderBreakdownRow("Class bonus", "+" + result.classBonus) +

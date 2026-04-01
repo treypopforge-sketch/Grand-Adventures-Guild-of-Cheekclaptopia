@@ -23,11 +23,55 @@
   window.GameData = {
     maxPartySize: 3,
     guildLevelThresholds: [0, 300, 800, 1600, 3000],
+    dailyRewardGold: 100,
+    newRunBonusGold: 50,
     difficultyConfig: {
       Easy: { dc: 10, rewardGold: 90, badge: "easy" },
       Medium: { dc: 15, rewardGold: 140, badge: "medium" },
       Hard: { dc: 20, rewardGold: 210, badge: "hard" }
     },
+    missionModifiers: [
+      {
+        id: "standard",
+        label: "Standard",
+        tag: "[Standard]",
+        dcDelta: 0,
+        rewardMultiplier: 1,
+        rollBonus: 0,
+        luckMin: -5,
+        luckMax: 5
+      },
+      {
+        id: "high-risk",
+        label: "High Risk",
+        tag: "[High Risk]",
+        dcDelta: 3,
+        rewardMultiplier: 1.5,
+        rollBonus: 0,
+        luckMin: -5,
+        luckMax: 5
+      },
+      {
+        id: "favorable",
+        label: "Favorable Conditions",
+        tag: "[Favorable]",
+        dcDelta: 0,
+        rewardMultiplier: 1,
+        rollBonus: 2,
+        luckMin: -5,
+        luckMax: 5
+      },
+      {
+        id: "unstable",
+        label: "Unstable",
+        tag: "[Unstable]",
+        dcDelta: 0,
+        rewardMultiplier: 1.2,
+        rollBonus: 0,
+        luckMin: -8,
+        luckMax: 8
+      }
+    ],
     statLabels: {
       atk: "Attack",
       def: "Defense",

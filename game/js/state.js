@@ -16,10 +16,28 @@
     }
   }
 
+  function getTodayString() {
+    var now = new Date();
+    var year = now.getFullYear();
+    var month = String(now.getMonth() + 1).padStart(2, "0");
+    var day = String(now.getDate()).padStart(2, "0");
+    return year + "-" + month + "-" + day;
+  }
+
   function createParty(id) {
     return {
       id: id,
       members: []
+    };
+  }
+
+  function defaultProgress() {
+    return {
+      started: true,
+      missionsCompleted: 0,
+      successfulMissions: 0,
+      recruitedCount: 0,
+      discoveredLocations: []
     };
   }
 
@@ -45,79 +63,6 @@
     return adventurers.map(normalizeAdventurer);
   }
 
-  function createRunState() {
-    var starterAdventurers = normalizeAdventurers(clone(window.GameData.starterAdventurers));
-    var freshState = {
-      gold: 180,
-      day: 1,
-      guildLevel: 1,
-      totalGoldSpent: 0,
-      maxParties: 1,
-      adventurers: starterAdventurers,
-      currentParties: [createParty(1)],
-      activePartyId: 1,
-      currentMission: null,
-      currentScreen: "hub",
-      previousScreen: "hub",
-      selectedLocationId: null,
-      selectedMapLocationId: null,
-      activeHubPanel: null,
-      tavernOffers: [],
-      settings: {
-        music: true,
-        sound: true
-      },
-      lastResult: null,
-      toast: null,
-      hasSave: true,
-      progress: {
-        started: true,
-        missionsCompleted: 0,
-        successfulMissions: 0,
-        recruitedCount: 0,
-        discoveredLocations: []
-      }
-    };
-
-    syncPartyStructure(freshState);
-    freshState.tavernOffers = window.GameSystems.generateTavernOffers(freshState, 3);
-    return freshState;
-  }
-
-  function createMenuState() {
-    return {
-      gold: 0,
-      day: 1,
-      guildLevel: 1,
-      totalGoldSpent: 0,
-      maxParties: 1,
-      adventurers: [],
-      currentParties: [createParty(1)],
-      activePartyId: 1,
-      currentMission: null,
-      currentScreen: "start",
-      previousScreen: "start",
-      selectedLocationId: null,
-      selectedMapLocationId: null,
-      activeHubPanel: null,
-      tavernOffers: [],
-      settings: {
-        music: true,
-        sound: true
-      },
-      lastResult: null,
-      toast: null,
-      hasSave: !!loadSave(),
-      progress: {
-        started: false,
-        missionsCompleted: 0,
-        successfulMissions: 0,
-        recruitedCount: 0,
-        discoveredLocations: []
-      }
-    };
-  }
-
   function getPartyById(targetState, partyId) {
     return targetState.currentParties.find(function (party) {
       return String(party.id) === String(partyId);
@@ -141,8 +86,7 @@
       leveledUp: nextLevel > previousLevel,
       capacityIncreased: nextMaxParties > previousMaxParties,
       previousLevel: previousLevel,
-      nextLevel: nextLevel,
-      nextMaxParties: nextMaxParties
+      nextLevel: nextLevel
     };
   }
 
@@ -200,6 +144,125 @@
     }
   }
 
+  function selectFirstMissionForLocation(targetState) {
+    if (!targetState.selectedLocationId) {
+      targetState.currentMission = null;
+      return [];
+    }
+
+    var missions = window.GameSystems.getMissionsForLocation(targetState, targetState.selectedLocationId);
+    targetState.currentMission = missions[0] || null;
+    return missions;
+  }
+
+  function regenerateDailyContent(targetState) {
+    targetState.currentMissions = window.GameSystems.generateDailyMissions(targetState);
+    targetState.tavernOffers = window.GameSystems.generateTavernOffers(targetState, 3);
+
+    if (targetState.selectedLocationId) {
+      selectFirstMissionForLocation(targetState);
+    } else {
+      targetState.currentMission = null;
+    }
+  }
+
+  function applyDailyReward(targetState) {
+    var today = getTodayString();
+    var reward = 0;
+
+    if (targetState.lastLoginDay !== today) {
+      reward = window.GameData.dailyRewardGold || 100;
+      targetState.gold += reward;
+      targetState.lastLoginDay = today;
+      regenerateDailyContent(targetState);
+    } else if (!Array.isArray(targetState.currentMissions) || !targetState.currentMissions.length) {
+      targetState.currentMissions = window.GameSystems.generateDailyMissions(targetState);
+      if (targetState.selectedLocationId) {
+        selectFirstMissionForLocation(targetState);
+      }
+    }
+
+    return reward;
+  }
+
+  function createRunState(options) {
+    var settings = options && options.settings ? clone(options.settings) : {
+      music: true,
+      sound: true
+    };
+    var meta = options && options.meta ? options.meta : {
+      guildLevel: 1,
+      totalGoldSpent: 0,
+      maxParties: 1,
+      lastLoginDay: getTodayString()
+    };
+    var freshState = {
+      gold: 180 + ((options && options.bonusGold) || 0),
+      day: 1,
+      guildLevel: meta.guildLevel || 1,
+      totalGoldSpent: meta.totalGoldSpent || 0,
+      maxParties: meta.maxParties || 1,
+      lastLoginDay: meta.lastLoginDay || getTodayString(),
+      adventurers: normalizeAdventurers((options && options.adventurers) || clone(window.GameData.starterAdventurers)),
+      currentParties: [createParty(1)],
+      activePartyId: 1,
+      currentMission: null,
+      currentMissions: [],
+      currentScreen: (options && options.currentScreen) || "hub",
+      previousScreen: (options && options.previousScreen) || "hub",
+      selectedLocationId: null,
+      selectedMapLocationId: null,
+      activeHubPanel: null,
+      tavernOffers: [],
+      settings: settings,
+      lastResult: null,
+      toast: null,
+      hasSave: true,
+      progress: clone((options && options.progress) || defaultProgress())
+    };
+
+    applyGuildProgression(freshState);
+    syncPartyStructure(freshState);
+    regenerateDailyContent(freshState);
+    return freshState;
+  }
+
+  function createMenuState() {
+    return {
+      gold: 0,
+      day: 1,
+      guildLevel: 1,
+      totalGoldSpent: 0,
+      maxParties: 1,
+      lastLoginDay: null,
+      adventurers: [],
+      currentParties: [createParty(1)],
+      activePartyId: 1,
+      currentMission: null,
+      currentMissions: [],
+      currentScreen: "start",
+      previousScreen: "start",
+      selectedLocationId: null,
+      selectedMapLocationId: null,
+      activeHubPanel: null,
+      tavernOffers: [],
+      settings: {
+        music: true,
+        sound: true
+      },
+      lastResult: null,
+      toast: null,
+      hasSave: !!loadSave(),
+      progress: {
+        started: false,
+        missionsCompleted: 0,
+        successfulMissions: 0,
+        recruitedCount: 0,
+        discoveredLocations: []
+      }
+    };
+  }
+
   var state = createMenuState();
 
   function serializableState() {
@@ -209,10 +272,12 @@
       guildLevel: state.guildLevel,
       totalGoldSpent: state.totalGoldSpent,
       maxParties: state.maxParties,
+      lastLoginDay: state.lastLoginDay,
       adventurers: clone(state.adventurers),
       currentParties: clone(state.currentParties),
       activePartyId: state.activePartyId,
       currentMission: clone(state.currentMission),
+      currentMissions: clone(state.currentMissions),
       selectedLocationId: state.selectedLocationId,
       selectedMapLocationId: state.selectedMapLocationId,
       tavernOffers: clone(state.tavernOffers),
@@ -272,7 +337,11 @@
   }
 
   function hydrateFromSave(savedState) {
-    var fresh = createRunState();
+    var fresh = createRunState({
+      currentScreen: "hub",
+      previousScreen: "hub"
+    });
+
     fresh.gold = typeof savedState.gold === "number" ? savedState.gold : fresh.gold;
     fresh.day = typeof savedState.day === "number" ? savedState.day : fresh.day;
     fresh.totalGoldSpent = typeof savedState.totalGoldSpent === "number" ? savedState.totalGoldSpent : 0;
@@ -282,6 +351,7 @@
     fresh.maxParties = typeof savedState.maxParties === "number"
       ? savedState.maxParties
       : window.GameSystems.getPartyCapacityForLevel(fresh.guildLevel);
+    fresh.lastLoginDay = savedState.lastLoginDay || fresh.lastLoginDay;
     fresh.adventurers = Array.isArray(savedState.adventurers) ? normalizeAdventurers(savedState.adventurers) : fresh.adventurers;
     fresh.currentParties = Array.isArray(savedState.currentParties) ? savedState.currentParties : [createParty(1)];
     if (!savedState.currentParties && Array.isArray(savedState.currentParty)) {
@@ -289,6 +359,7 @@
     }
     fresh.activePartyId = savedState.activePartyId || fresh.currentParties[0].id;
     fresh.currentMission = savedState.currentMission || null;
+    fresh.currentMissions = Array.isArray(savedState.currentMissions) ? savedState.currentMissions : [];
     fresh.selectedLocationId = savedState.selectedLocationId || null;
     fresh.selectedMapLocationId = savedState.selectedMapLocationId || savedState.selectedLocationId || null;
     fresh.tavernOffers = Array.isArray(savedState.tavernOffers) ? savedState.tavernOffers.map(function (offer) {
@@ -301,22 +372,50 @@
     fresh.settings = Object.assign({}, fresh.settings, savedState.settings || {});
     fresh.lastResult = savedState.lastResult || null;
     fresh.progress = Object.assign({}, fresh.progress, savedState.progress || {});
+
     applyGuildProgression(fresh);
     syncPartyStructure(fresh);
+
+    if (!fresh.currentMissions.length) {
+      fresh.currentMissions = window.GameSystems.generateDailyMissions(fresh);
+    }
+
+    if (!fresh.currentMission || !fresh.currentMissions.some(function (mission) {
+      return mission.id === fresh.currentMission.id;
+    })) {
+      selectFirstMissionForLocation(fresh);
+    }
+
     if (!fresh.tavernOffers.length) {
       fresh.tavernOffers = window.GameSystems.generateTavernOffers(fresh, 3);
     }
-    fresh.currentScreen = "hub";
-    fresh.previousScreen = "hub";
-    fresh.activeHubPanel = null;
-    fresh.toast = null;
-    fresh.hasSave = true;
-    return fresh;
+
+    return {
+      state: fresh,
+      dailyRewardGranted: applyDailyReward(fresh)
+    };
   }
 
   function initialize() {
-    state = createMenuState();
+    var savedState = loadSave();
+
+    if (!savedState) {
+      state = createMenuState();
+      emit();
+      return;
+    }
+
+    var hydrated = hydrateFromSave(savedState);
+    state = hydrated.state;
+    state.currentScreen = "start";
+    state.previousScreen = "start";
+    state.activeHubPanel = null;
+    persist();
     emit();
+
+    if (hydrated.dailyRewardGranted) {
+      showToast("Daily Reward: +" + hydrated.dailyRewardGranted + " Gold");
+    }
   }
 
   function startNewGame() {
@@ -326,6 +425,24 @@
     showToast("A new guild has been founded.");
   }
 
+  function startNewRun() {
+    var meta = {
+      guildLevel: state.guildLevel,
+      totalGoldSpent: state.totalGoldSpent,
+      maxParties: state.maxParties,
+      lastLoginDay: getTodayString()
+    };
+
+    state = createRunState({
+      meta: meta,
+      settings: state.settings,
+      bonusGold: window.GameData.newRunBonusGold || 50
+    });
+    persist();
+    emit();
+    showToast("New Run Started - Bonus Applied");
+  }
+
   function continueGame() {
     var savedState = loadSave();
     if (!savedState) {
@@ -333,9 +450,16 @@
       return;
     }
 
-    state = hydrateFromSave(savedState);
+    var hydrated = hydrateFromSave(savedState);
+    state = hydrated.state;
     persist();
     emit();
+
+    if (hydrated.dailyRewardGranted) {
+      showToast("Daily Reward: +" + hydrated.dailyRewardGranted + " Gold");
+      return;
+    }
+
     showToast("Welcome back, Guildmaster.");
   }
 
@@ -345,11 +469,20 @@
       return;
     }
 
-    if (screenName === "guildHall" && !state.selectedLocationId) {
-      state.currentScreen = "map";
-      emit();
-      showToast("Pick a map location before opening the Guild Hall.");
-      return;
+    if (screenName === "guildHall") {
+      if (!state.selectedLocationId) {
+        state.currentScreen = "map";
+        emit();
+        showToast("Pick a map location before opening the Guild Hall.");
+        return;
+      }
+
+      if (!window.GameSystems.getMissionsForLocation(state, state.selectedLocationId).length) {
+        state.currentScreen = "map";
+        emit();
+        showToast("No contracts are available there today.");
+        return;
+      }
     }
 
     if (screenName !== "settings") {
@@ -374,15 +507,14 @@
   }
 
   function selectMapLocation(locationId) {
-    var missions = window.GameSystems.buildMissionsForLocation(locationId);
     state.selectedMapLocationId = locationId;
     state.selectedLocationId = locationId;
-    state.currentMission = missions[0] || null;
 
     if (state.progress.discoveredLocations.indexOf(locationId) === -1) {
       state.progress.discoveredLocations.push(locationId);
     }
 
+    selectFirstMissionForLocation(state);
     persist();
     emit();
   }
@@ -390,6 +522,11 @@
   function enterGuildHall() {
     if (!state.selectedLocationId) {
       showToast("Choose a location on the map first.");
+      return;
+    }
+
+    if (!window.GameSystems.getMissionsForLocation(state, state.selectedLocationId).length) {
+      showToast("No contracts are available there today.");
       return;
     }
 
@@ -404,7 +541,7 @@
       return;
     }
 
-    var mission = window.GameSystems.buildMissionsForLocation(state.selectedLocationId).find(function (entry) {
+    var mission = window.GameSystems.getMissionsForLocation(state, state.selectedLocationId).find(function (entry) {
       return entry.id === missionId;
     }) || null;
 
@@ -495,21 +632,13 @@
 
     state.adventurers.push(normalizeAdventurer(clone(offer.adventurer)));
     state.progress.recruitedCount += 1;
-    state.tavernOffers = state.tavernOffers.filter(function (entry) {
-      return entry.id !== offerId;
-    });
 
     if (spendResult.progression && spendResult.progression.leveledUp) {
-      state.tavernOffers = window.GameSystems.generateTavernOffers(state, 3);
-    } else {
-      state.tavernOffers = state.tavernOffers.concat(window.GameSystems.generateTavernOffers(state, 1));
-    }
+      syncPartyStructure(state);
+      regenerateDailyContent(state);
+      persist();
+      emit();
 
-    syncPartyStructure(state);
-
-    persist();
-    emit();
-    if (spendResult.progression && spendResult.progression.leveledUp) {
       if (spendResult.progression.capacityIncreased) {
         showToast("Guild Level Up! Party capacity increased!");
       } else {
@@ -518,6 +647,13 @@
       return;
     }
 
+    state.tavernOffers = state.tavernOffers.filter(function (entry) {
+      return entry.id !== offerId;
+    });
+    state.tavernOffers = state.tavernOffers.concat(window.GameSystems.generateTavernOffers(state, 1));
+    syncPartyStructure(state);
+    persist();
+    emit();
     showToast(offer.adventurer.name + " joined the guild.");
   }
 
@@ -586,9 +722,10 @@
       }
     });
     window.GameSystems.runEndOfDayHooks(state);
+    regenerateDailyContent(state);
     persist();
     emit();
-    showToast("A new day begins. Recovering adventurers are refreshed.");
+    showToast("A new day begins. Fresh contracts are available.");
   }
 
   function returnToHub() {
@@ -632,6 +769,7 @@
     selectParty: selectParty,
     startMission: startMission,
     startNewGame: startNewGame,
+    startNewRun: startNewRun,
     subscribe: subscribe,
     togglePartyMember: togglePartyMember,
     updateSetting: updateSetting
