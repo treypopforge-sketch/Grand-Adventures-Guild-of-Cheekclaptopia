@@ -194,7 +194,8 @@ button:disabled {
   border: 1px solid var(--border);
   min-height: 56px;
   padding: 0 18px;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  will-change: transform;
 }
 
 .primary-button {
@@ -240,7 +241,7 @@ button:disabled {
 .mission-card:active,
 .roster-card:active,
 .nav-button:active {
-  transform: scale(0.98);
+  transform: scale(0.95);
 }
 
 .top-strip {
@@ -357,6 +358,32 @@ button:disabled {
   color: #ffd767;
 }
 
+.info-tip,
+.hint-text,
+.result-kicker {
+  color: var(--muted);
+}
+
+.info-tip,
+.hint-text {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.result-kicker {
+  margin: -4px 0 0;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.section-divider {
+  height: 1px;
+  margin: 18px 4px 6px;
+  background: linear-gradient(90deg, transparent, rgba(255, 191, 66, 0.28), transparent);
+}
+
 .warning-stack {
   display: grid;
   gap: 8px;
@@ -390,6 +417,7 @@ button:disabled {
   background: rgba(11, 11, 14, 0.76);
   color: var(--text);
   text-align: left;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .action-card--warning {
@@ -635,6 +663,7 @@ button:disabled {
   padding: 16px;
   text-align: left;
   color: var(--text);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
 .mission-card--active {
@@ -801,10 +830,32 @@ button:disabled {
   display: grid;
   gap: 16px;
   text-align: center;
+  animation: fadeUpIn 0.45s ease both;
 }
 
 .result-pill-row {
   justify-content: center;
+}
+
+.result-total-card {
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 190, 57, 0.28);
+  background: linear-gradient(180deg, rgba(255, 190, 57, 0.14), rgba(15, 15, 18, 0.72));
+}
+
+.result-total-card span,
+.result-total-card small {
+  display: block;
+  color: var(--muted);
+}
+
+.result-total-card strong {
+  display: block;
+  margin: 8px 0 6px;
+  font-size: 2.7rem;
+  color: #ffe29e;
+  line-height: 1;
 }
 
 .result-breakdown {
@@ -831,6 +882,10 @@ button:disabled {
 
 .breakdown-row strong {
   color: #fff3ca;
+}
+
+.value-accent {
+  color: #ffd767 !important;
 }
 
 .value-positive {
@@ -863,14 +918,27 @@ button:disabled {
 .outcome-banner {
   padding: 14px 16px;
   border-radius: 20px;
-  font-size: 1.25rem;
+  font-size: 1.55rem;
   font-weight: 700;
   letter-spacing: 0.08em;
+  line-height: 1.15;
+  animation: outcomePop 0.4s ease 0.12s both;
 }
 
 .reward-line strong {
   color: #ffd767;
   font-size: 1.2rem;
+}
+
+.reward-line__value {
+  text-align: right;
+}
+
+.reward-line__value small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .result-report {
@@ -880,7 +948,83 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
   color: var(--text);
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.result-details {
+  margin-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+}
+
+.result-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  list-style: none;
+}
+
+.result-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.result-details__rows {
+  margin-top: 10px;
+}
+
+.result-card--impact {
+  animation: fadeUpIn 0.45s ease both, impactShake 0.45s ease 0.16s both;
+}
+
+.tutorial-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: rgba(3, 5, 8, 0.5);
+  display: flex;
+  align-items: flex-end;
+  padding: 18px;
+  pointer-events: none;
+}
+
+.tutorial-card {
+  width: 100%;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 190, 57, 0.38);
+  background: linear-gradient(180deg, rgba(24, 20, 15, 0.96), rgba(10, 10, 13, 0.96));
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+
+.tutorial-card h3 {
+  margin: 0 0 8px;
+  color: #ffe29e;
+}
+
+.tutorial-copy {
+  margin: 0;
+  color: var(--text);
   line-height: 1.5;
+}
+
+.tutorial-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.tutorial-actions .mini-button {
+  flex: 1;
+}
+
+.tutorial-target {
+  position: relative;
+  z-index: 7;
+}
+
+.tutorial-target--active {
+  box-shadow: 0 0 0 2px rgba(255, 215, 103, 0.85), 0 0 36px rgba(255, 190, 57, 0.26), var(--shadow);
 }
 
 .result-tone--critical .outcome-banner {
@@ -929,6 +1073,27 @@ button:disabled {
   z-index: 4;
 }
 
+@media (hover: hover) {
+  .primary-button:hover,
+  .ghost-button:hover,
+  .danger-button:hover,
+  .mini-button:hover,
+  .action-card:hover,
+  .mission-card:hover,
+  .map-node:hover,
+  .roster-card:hover,
+  .nav-button:hover,
+  .end-day-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.26);
+    border-color: rgba(255, 190, 57, 0.55);
+  }
+
+  .primary-button:hover {
+    background: linear-gradient(180deg, #ffd25c, #f5b420);
+  }
+}
+
 @keyframes drift {
   0% {
     transform: translate3d(0, 0, 0);
@@ -940,6 +1105,49 @@ button:disabled {
   100% {
     transform: translate3d(14px, -120vh, 0);
     opacity: 0;
+  }
+}
+
+@keyframes fadeUpIn {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes outcomePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes impactShake {
+  0% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+  100% {
+    transform: translateX(0);
   }
 }
 
