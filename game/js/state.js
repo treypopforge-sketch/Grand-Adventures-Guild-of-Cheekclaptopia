@@ -2,6 +2,16 @@
   var STORAGE_KEY = "cheekclaptopia-save-v1";
   var listeners = [];
   var toastTimer = null;
+  var VALID_ADVENTURER_STATES = {
+    available: true,
+    onQuest: true,
+    recovering: true,
+    exhausted: true
+  };
+  var VALID_PARTY_STATUSES = {
+    idle: true,
+    onMission: true
+  };
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -27,7 +37,8 @@
   function createParty(id) {
     return {
       id: id,
-      members: []
+      members: [],
+      status: "idle"
     };
   }
 
@@ -41,22 +52,134 @@
     };
   }
 
-  function normalizeAdventurer(adventurer) {
-    var status = adventurer.status;
-    if (!status) {
-      status = adventurer.isTired ? "tired" : "ready";
+  function deriveLegacyStatus(adventurer, normalizedState) {
+    if (normalizedState === "onQuest" || normalizedState === "recovering") {
+      return "tired";
     }
 
-    return {
+    if (normalizedState === "exhausted") {
+      return "injured";
+    }
+
+    if (adventurer.status === "ready" || adventurer.status === "tired" || adventurer.status === "injured") {
+      return adventurer.status;
+    }
+
+    if (adventurer.isTired) {
+      return "tired";
+    }
+
+    return "ready";
+  }
+
+  function deriveAdventurerState(adventurer) {
+    if (VALID_ADVENTURER_STATES[adventurer.state]) {
+      return adventurer.state;
+    }
+
+    if (adventurer.status === "injured") {
+      return "exhausted";
+    }
+
+    if (adventurer.status === "tired" || adventurer.isTired) {
+      return "recovering";
+    }
+
+    return "available";
+  }
+
+  function setAdventurerState(adventurer, nextState, injuryDaysRemaining) {
+    var normalizedState = VALID_ADVENTURER_STATES[nextState] ? nextState : "available";
+    var nextDays = typeof injuryDaysRemaining === "number"
+      ? Math.max(0, injuryDaysRemaining)
+      : Math.max(0, adventurer.injuryDaysRemaining || 0);
+
+    adventurer.state = normalizedState;
+
+    if (normalizedState === "available") {
+      adventurer.status = "ready";
+      adventurer.injuryDaysRemaining = 0;
+      return adventurer;
+    }
+
+    if (normalizedState === "onQuest" || normalizedState === "recovering") {
+      adventurer.status = "tired";
+      adventurer.injuryDaysRemaining = 0;
+      return adventurer;
+    }
+
+    adventurer.status = "injured";
+    adventurer.injuryDaysRemaining = Math.max(1, nextDays || 2);
+    return adventurer;
+  }
+
+  function isAdventurerAvailable(adventurer) {
+    return adventurer && deriveAdventurerState(adventurer) === "available";
+  }
+
+  function normalizePartyStatus(party) {
+    return VALID_PARTY_STATUSES[party && party.status] ? party.status : "idle";
+  }
+
+  function normalizeMission(mission) {
+    var normalizedId;
+    var normalizedRank;
+    var fallbackSeed;
+
+    if (!mission) {
+      return null;
+    }
+
+    normalizedRank = mission.rank || mission.difficulty || "Medium";
+    fallbackSeed = [
+      mission.locationId || "legacy",
+      mission.name || mission.title || normalizedRank
+    ].join("-");
+    normalizedId = mission.id || mission.questId || fallbackSeed.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+    return Object.assign({}, mission, {
+      id: normalizedId,
+      questId: mission.questId || normalizedId,
+      rank: normalizedRank,
+      duration: typeof mission.duration === "number" ? mission.duration : 1,
+      events: Array.isArray(mission.events) ? mission.events.slice() : []
+    });
+  }
+
+  function normalizeMissions(missions) {
+    return Array.isArray(missions) ? missions.map(normalizeMission).filter(Boolean) : [];
+  }
+
+  function normalizeAdventurer(adventurer) {
+    var atk = typeof adventurer.atk === "number"
+      ? adventurer.atk
+      : (typeof adventurer.str === "number" ? adventurer.str : 0);
+    var def = typeof adventurer.def === "number"
+      ? adventurer.def
+      : (typeof adventurer.sta === "number" ? adventurer.sta : 0);
+    var spd = typeof adventurer.spd === "number"
+      ? adventurer.spd
+      : (typeof adventurer.dex === "number" ? adventurer.dex : 0);
+    var stateValue = deriveAdventurerState(adventurer);
+    var injuryDaysRemaining = Math.max(0, adventurer.injuryDaysRemaining || 0);
+    var normalized = {
       id: adventurer.id,
       name: adventurer.name,
       class: adventurer.class,
-      atk: adventurer.atk,
-      def: adventurer.def,
-      spd: adventurer.spd,
-      status: status,
-      injuryDaysRemaining: adventurer.injuryDaysRemaining || 0
+      atk: atk,
+      def: def,
+      spd: spd,
+      str: typeof adventurer.str === "number" ? adventurer.str : atk,
+      dex: typeof adventurer.dex === "number" ? adventurer.dex : spd,
+      sta: typeof adventurer.sta === "number" ? adventurer.sta : def,
+      cha: typeof adventurer.cha === "number" ? adventurer.cha : 0,
+      mp: typeof adventurer.mp === "number" ? adventurer.mp : 0,
+      state: stateValue,
+      status: deriveLegacyStatus(adventurer, stateValue),
+      injuryDaysRemaining: injuryDaysRemaining
     };
+
+    return setAdventurerState(normalized, normalized.state, normalized.injuryDaysRemaining);
   }
 
   function normalizeAdventurers(adventurers) {
@@ -126,7 +249,8 @@
 
       return {
         id: normalizedId,
-        members: normalizedMembers
+        members: normalizedMembers,
+        status: normalizePartyStatus(party)
       };
     }) : [];
 
@@ -151,12 +275,12 @@
     }
 
     var missions = window.GameSystems.getMissionsForLocation(targetState, targetState.selectedLocationId);
-    targetState.currentMission = missions[0] || null;
+    targetState.currentMission = normalizeMission(missions[0]) || null;
     return missions;
   }
 
   function regenerateDailyContent(targetState) {
-    targetState.currentMissions = window.GameSystems.generateDailyMissions(targetState);
+    targetState.currentMissions = normalizeMissions(window.GameSystems.generateDailyMissions(targetState));
     targetState.tavernOffers = window.GameSystems.generateTavernOffers(targetState, 3);
 
     if (targetState.selectedLocationId) {
@@ -176,7 +300,7 @@
       targetState.lastLoginDay = today;
       regenerateDailyContent(targetState);
     } else if (!Array.isArray(targetState.currentMissions) || !targetState.currentMissions.length) {
-      targetState.currentMissions = window.GameSystems.generateDailyMissions(targetState);
+      targetState.currentMissions = normalizeMissions(window.GameSystems.generateDailyMissions(targetState));
       if (targetState.selectedLocationId) {
         selectFirstMissionForLocation(targetState);
       }
@@ -358,8 +482,8 @@
       fresh.currentParties[0].members = savedState.currentParty.slice(0, window.GameData.maxPartySize);
     }
     fresh.activePartyId = savedState.activePartyId || fresh.currentParties[0].id;
-    fresh.currentMission = savedState.currentMission || null;
-    fresh.currentMissions = Array.isArray(savedState.currentMissions) ? savedState.currentMissions : [];
+    fresh.currentMission = normalizeMission(savedState.currentMission) || null;
+    fresh.currentMissions = normalizeMissions(savedState.currentMissions);
     fresh.selectedLocationId = savedState.selectedLocationId || null;
     fresh.selectedMapLocationId = savedState.selectedMapLocationId || savedState.selectedLocationId || null;
     fresh.tavernOffers = Array.isArray(savedState.tavernOffers) ? savedState.tavernOffers.map(function (offer) {
@@ -377,7 +501,7 @@
     syncPartyStructure(fresh);
 
     if (!fresh.currentMissions.length) {
-      fresh.currentMissions = window.GameSystems.generateDailyMissions(fresh);
+      fresh.currentMissions = normalizeMissions(window.GameSystems.generateDailyMissions(fresh));
     }
 
     if (!fresh.currentMission || !fresh.currentMissions.some(function (mission) {
@@ -549,7 +673,7 @@
       return;
     }
 
-    state.currentMission = mission;
+    state.currentMission = normalizeMission(mission);
     persist();
     emit();
   }
@@ -581,8 +705,8 @@
       return;
     }
 
-    if (adventurer.status !== "ready") {
-      showToast(adventurer.name + " is " + adventurer.status + " and cannot be assigned.");
+    if (!isAdventurerAvailable(adventurer)) {
+      showToast(adventurer.name + " is " + window.GameSystems.getStatusLabel(adventurer).toLowerCase() + " and cannot be assigned.");
       return;
     }
 
@@ -659,6 +783,8 @@
 
   function startMission(partyId) {
     var party = getPartyById(state, partyId || state.activePartyId);
+    var result;
+    var partyMembers;
 
     if (!state.currentMission) {
       showToast("Choose a mission first.");
@@ -670,14 +796,23 @@
       return;
     }
 
-    var partyMembers = window.GameSystems.getPartyMembers(state, party.id);
-    if (partyMembers.some(function (member) { return member.status !== "ready"; })) {
+    partyMembers = window.GameSystems.getPartyMembers(state, party.id);
+    if (partyMembers.some(function (member) { return !isAdventurerAvailable(member); })) {
       showToast("That party has members who still need to recover.");
       return;
     }
 
-    var result = window.GameSystems.resolveMission(state, party.id);
+    party.status = "onMission";
+    partyMembers.forEach(function (member) {
+      setAdventurerState(member, "onQuest");
+    });
+
+    result = window.GameSystems.resolveMission(state, party.id);
     if (!result) {
+      party.status = "idle";
+      partyMembers.forEach(function (member) {
+        setAdventurerState(member, "available");
+      });
       return;
     }
 
@@ -690,14 +825,13 @@
 
     partyMembers.forEach(function (member) {
       if (result.outcome === "criticalFailure") {
-        member.status = "injured";
-        member.injuryDaysRemaining = 2;
+        setAdventurerState(member, "exhausted", 2);
       } else {
-        member.status = "tired";
-        member.injuryDaysRemaining = 0;
+        setAdventurerState(member, "recovering");
       }
     });
 
+    party.status = "idle";
     syncPartyStructure(state);
     state.currentScreen = "result";
     persist();
@@ -711,15 +845,21 @@
 
     state.day += 1;
     state.adventurers.forEach(function (adventurer) {
-      if (adventurer.status === "tired") {
-        adventurer.status = "ready";
-        adventurer.injuryDaysRemaining = 0;
-      } else if (adventurer.status === "injured") {
+      var currentState = deriveAdventurerState(adventurer);
+
+      if (currentState === "onQuest" || currentState === "recovering") {
+        setAdventurerState(adventurer, "available");
+      } else if (currentState === "exhausted" || adventurer.status === "injured") {
         adventurer.injuryDaysRemaining = Math.max(0, adventurer.injuryDaysRemaining - 1);
         if (adventurer.injuryDaysRemaining === 0) {
-          adventurer.status = "ready";
+          setAdventurerState(adventurer, "available");
+        } else {
+          setAdventurerState(adventurer, "exhausted", adventurer.injuryDaysRemaining);
         }
       }
+    });
+    state.currentParties.forEach(function (party) {
+      party.status = "idle";
     });
     window.GameSystems.runEndOfDayHooks(state);
     regenerateDailyContent(state);

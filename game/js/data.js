@@ -1,5 +1,19 @@
 (function () {
+  function buildExpandedStats(atk, def, spd, overrides) {
+    var extra = overrides || {};
+
+    return {
+      str: typeof extra.str === "number" ? extra.str : atk,
+      dex: typeof extra.dex === "number" ? extra.dex : spd,
+      sta: typeof extra.sta === "number" ? extra.sta : def,
+      cha: typeof extra.cha === "number" ? extra.cha : 0,
+      mp: typeof extra.mp === "number" ? extra.mp : 0
+    };
+  }
+
   function adventurer(id, name, heroClass, atk, def, spd) {
+    var expandedStats = buildExpandedStats(atk, def, spd);
+
     return {
       id: id,
       name: name,
@@ -7,12 +21,20 @@
       atk: atk,
       def: def,
       spd: spd,
+      str: expandedStats.str,
+      dex: expandedStats.dex,
+      sta: expandedStats.sta,
+      cha: expandedStats.cha,
+      mp: expandedStats.mp,
+      state: "available",
       status: "ready",
       injuryDaysRemaining: 0
     };
   }
 
   function mission(title, summary, missionType, primaryStat, options) {
+    var difficulty = options.difficulty || null;
+
     return {
       title: title,
       summary: summary,
@@ -21,7 +43,10 @@
       dc: options.dc,
       rewardRange: options.rewardRange,
       modifierBias: options.modifierBias || [],
-      difficulty: options.difficulty || null,
+      difficulty: difficulty,
+      rank: options.rank || difficulty,
+      duration: typeof options.duration === "number" ? options.duration : 1,
+      events: Array.isArray(options.events) ? options.events.slice() : [],
       isRare: !!options.isRare,
       isBoss: !!options.isBoss,
       bonusRewardGold: options.bonusRewardGold || 0
@@ -122,7 +147,12 @@
     statLabels: {
       atk: "Attack",
       def: "Defense",
-      spd: "Speed"
+      spd: "Speed",
+      str: "Strength",
+      dex: "Dexterity",
+      sta: "Stamina",
+      cha: "Charisma",
+      mp: "Mana"
     },
     classDetails: {
       Warrior: {

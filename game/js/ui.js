@@ -24,6 +24,33 @@
     return window.GameData.classDetails[heroClass].short;
   }
 
+  function renderStatLine(adventurer) {
+    var statPairs = [
+      {
+        legacyLabel: "ATK",
+        legacyValue: adventurer.atk,
+        nextLabel: "STR",
+        nextValue: window.GameSystems.getAdventurerStat(adventurer, "str")
+      },
+      {
+        legacyLabel: "DEF",
+        legacyValue: adventurer.def,
+        nextLabel: "STA",
+        nextValue: window.GameSystems.getAdventurerStat(adventurer, "sta")
+      },
+      {
+        legacyLabel: "SPD",
+        legacyValue: adventurer.spd,
+        nextLabel: "DEX",
+        nextValue: window.GameSystems.getAdventurerStat(adventurer, "dex")
+      }
+    ];
+
+    return statPairs.map(function (entry) {
+      return '<span class="stat-pair">' + entry.legacyLabel + " " + entry.legacyValue + " (" + entry.nextLabel + " " + entry.nextValue + ")</span>";
+    }).join("");
+  }
+
   function renderParticles() {
     var particles = [];
     var index;
@@ -441,6 +468,7 @@
   function renderAdventurerCard(adventurer, state, interactive) {
     var assignedParty = getPartyAssignment(state, adventurer.id);
     var activeParty = window.GameSystems.getPartyById(state, state.activePartyId);
+    var adventurerState = window.GameSystems.getAdventurerState(adventurer);
     var isSelected = assignedParty && activeParty && assignedParty.id === activeParty.id;
     var isAssignedElsewhere = assignedParty && activeParty && assignedParty.id !== activeParty.id;
     var classes = [];
@@ -448,15 +476,15 @@
 
     if (isSelected) {
       classes.push("roster-card--selected");
-      status = status === "Ready" ? "Party " + assignedParty.id : status + " | Party " + assignedParty.id;
+      status = status === "Available" ? "Party " + assignedParty.id : status + " | Party " + assignedParty.id;
     } else if (isAssignedElsewhere) {
       classes.push("roster-card--assigned-other");
-      status = status === "Ready" ? "Party " + assignedParty.id : status + " | Party " + assignedParty.id;
+      status = status === "Available" ? "Party " + assignedParty.id : status + " | Party " + assignedParty.id;
     }
 
-    if (adventurer.status === "tired") {
+    if (adventurerState === "recovering" || adventurerState === "onQuest") {
       classes.push("roster-card--tired");
-    } else if (adventurer.status === "injured") {
+    } else if (adventurerState === "exhausted") {
       classes.push("roster-card--injured");
     }
 
@@ -468,7 +496,7 @@
         '<div class="roster-card__body">' +
           "<strong>" + escapeHtml(adventurer.name) + "</strong>" +
           "<p>" + escapeHtml(adventurer.class) + " | Power " + powerValue(adventurer) + "</p>" +
-          '<p class="stats-line" title="ATK breaks lines, DEF absorbs pressure, SPD handles scouting and escape.">ATK ' + adventurer.atk + "  DEF " + adventurer.def + "  SPD " + adventurer.spd + "</p>" +
+          '<p class="stats-line" title="Legacy combat labels stay visible for compatibility: ATK = STR, DEF = STA, SPD = DEX.">' + renderStatLine(adventurer) + "</p>" +
         "</div>" +
         '<span class="selection-pill">' + escapeHtml(status) + "</span>" +
       "</button>";
@@ -494,7 +522,7 @@
             '<div class="roster-card__body">' +
               "<strong>" + escapeHtml(offer.adventurer.name) + "</strong>" +
               "<p>" + escapeHtml(offer.adventurer.class) + " | Power " + power + "</p>" +
-              '<p class="stats-line" title="ATK breaks lines, DEF absorbs pressure, SPD handles scouting and escape.">ATK ' + offer.adventurer.atk + "  DEF " + offer.adventurer.def + "  SPD " + offer.adventurer.spd + "</p>" +
+              '<p class="stats-line" title="Legacy combat labels stay visible for compatibility: ATK = STR, DEF = STA, SPD = DEX.">' + renderStatLine(offer.adventurer) + "</p>" +
             "</div>" +
             '<button class="mini-button" data-action="recruit" data-offer-id="' + offer.id + '">Hire ' + offer.cost + "g</button>" +
           "</article>";
@@ -505,7 +533,7 @@
           '<div class="sheet-panel" data-stop-click="true">' +
             '<div class="sheet-head"><h3>Tavern</h3><button class="close-x" data-action="close-panel">Close</button></div>' +
             '<p class="muted">Guild level ' + state.guildLevel + " brings recruits with " + range.min + "-" + range.max + " stat rolls.</p>" +
-            renderInfoTip("ATK drives assaults, DEF stabilizes pressure, SPD wins scouting and escape routes.") +
+            renderInfoTip("Legacy ATK / DEF / SPD remain visible, but STR / STA / DEX are now the active combat stats.") +
             '<div class="sheet-list">' + offers + "</div>" +
           "</div>" +
         "</section>";
@@ -519,8 +547,8 @@
       '<section class="sheet-overlay" data-action="close-panel">' +
         '<div class="sheet-panel" data-stop-click="true">' +
           '<div class="sheet-head"><h3>Roster</h3><button class="close-x" data-action="close-panel">Close</button></div>' +
-          '<p class="muted">Tired heroes recover on the next day. Injured heroes need two full day cycles.</p>' +
-          renderInfoTip("ATK breaks lines, DEF absorbs pressure, SPD handles scouting and escape.") +
+          '<p class="muted">Recovering heroes return next day. Exhausted heroes need two full day cycles.</p>' +
+          renderInfoTip("Legacy ATK / DEF / SPD remain visible, but STR / STA / DEX are now the active combat stats.") +
           '<div class="sheet-list">' + adventurers + "</div>" +
         "</div>" +
       "</section>";
@@ -529,14 +557,14 @@
   function renderPartySummary(state, party) {
     var members = window.GameSystems.getPartyMembers(state, party.id);
     var unavailableCount = members.filter(function (member) {
-      return member.status !== "ready";
+      return !window.GameSystems.isAdventurerReady(member);
     }).length;
 
     return '' +
       '<div class="party-summary-card">' +
         "<strong>Party " + party.id + "</strong>" +
         "<small>" + members.length + "/" + window.GameData.maxPartySize + " heroes | " + window.GameSystems.getPartyPower(state, party.id) + " power</small>" +
-        "<small>" + (unavailableCount ? unavailableCount + " recovering" : "Ready for assignment") + "</small>" +
+        "<small>" + escapeHtml(party.status === "onMission" ? "On mission" : (unavailableCount ? unavailableCount + " unavailable" : "Ready for assignment")) + "</small>" +
       "</div>";
   }
 
@@ -717,7 +745,7 @@
       var partyPower = window.GameSystems.getPartyPower(state, party.id);
       var active = String(state.activePartyId) === String(party.id);
       var hasUnavailableMembers = partyMembers.some(function (member) {
-        return member.status !== "ready";
+        return !window.GameSystems.isAdventurerReady(member);
       });
       var difference = mission ? partyPower - mission.dc : 0;
       var compareClass = difference >= 0 ? "comparison-card--positive" : "comparison-card--negative";
@@ -769,8 +797,8 @@
         '<div class="party-card-list">' + renderPartyCards(state, mission) + "</div>" +
         renderSectionDivider() +
         '<section class="panel-card">' +
-          '<div class="section-head"><h3>Available Adventurers</h3><small>Tired and injured heroes cannot be assigned</small></div>' +
-          renderInfoTip("ATK breaks lines, DEF absorbs pressure, SPD handles scouting and escape.") +
+          '<div class="section-head"><h3>Available Adventurers</h3><small>Recovering and exhausted heroes cannot be assigned</small></div>' +
+          renderInfoTip("Legacy ATK / DEF / SPD remain visible, but STR / STA / DEX are now the active combat stats.") +
           '<div class="roster-list">' +
             state.adventurers.map(function (adventurer) {
               return renderAdventurerCard(adventurer, state, true);
