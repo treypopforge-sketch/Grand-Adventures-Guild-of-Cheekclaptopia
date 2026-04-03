@@ -720,6 +720,16 @@ button:disabled {
   flex: 1;
 }
 
+.stats-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.stat-pair {
+  white-space: nowrap;
+}
+
 .stats-line,
 .selection-pill,
 .party-slot small,
